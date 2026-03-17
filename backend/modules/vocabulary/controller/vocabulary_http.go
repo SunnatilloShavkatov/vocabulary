@@ -1,4 +1,4 @@
-package controller
+package vocabularycontroller
 
 import (
 	"encoding/json"
@@ -12,10 +12,10 @@ import (
 )
 
 type VocabularyHandler struct {
-	service *service.VocabularyService
+	service *vocabularyservice.VocabularyService
 }
 
-func RegisterVocabularyRoutes(mux *http.ServeMux, svc *service.VocabularyService, protected func(http.HandlerFunc) http.HandlerFunc) {
+func RegisterVocabularyRoutes(mux *http.ServeMux, svc *vocabularyservice.VocabularyService, protected func(http.HandlerFunc) http.HandlerFunc) {
 	h := &VocabularyHandler{service: svc}
 	mux.HandleFunc("GET /v1/vocabulary", h.list)
 	mux.HandleFunc("POST /v1/vocabulary", protected(h.create))
@@ -60,7 +60,7 @@ func (h *VocabularyHandler) create(w http.ResponseWriter, r *http.Request) {
 }
 
 type vocabularyListResponse struct {
-	Items []service.VocabularyItem `json:"items"`
+	Items []vocabularyservice.VocabularyItem `json:"items"`
 	Meta  vocabularyMetaInfo       `json:"meta"`
 }
 
@@ -87,7 +87,7 @@ func (h *VocabularyHandler) list(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if items == nil {
-		items = []service.VocabularyItem{}
+		items = []vocabularyservice.VocabularyItem{}
 	}
 
 	if page < 1 {

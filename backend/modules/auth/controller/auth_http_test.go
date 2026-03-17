@@ -1,4 +1,4 @@
-package controller
+package authcontroller
 
 import (
 	"bytes"
@@ -16,7 +16,7 @@ func noopProtected(next http.HandlerFunc) http.HandlerFunc { return next }
 
 func TestLoginSuccess(t *testing.T) {
 	mux := http.NewServeMux()
-	svc := service.NewAuthService(config.Config{
+	svc := authservice.NewAuthService(config.Config{
 		JWT: config.JWTConfig{Secret: "test-secret", AccessTTLMinutes: 5},
 		BootstrapAdmin: config.BootstrapAdminConfig{Email: "admin@example.com", Password: "password123"},
 	})
@@ -30,7 +30,7 @@ func TestLoginSuccess(t *testing.T) {
 		t.Fatalf("expected status %d, got %d", http.StatusOK, res.Code)
 	}
 
-	var response service.AuthLoginResponse
+	var response authservice.AuthLoginResponse
 	if err := json.NewDecoder(res.Body).Decode(&response); err != nil {
 		t.Fatalf("expected valid json response, got %v", err)
 	}
@@ -45,7 +45,7 @@ func TestLoginSuccess(t *testing.T) {
 
 func TestLoginValidationErrors(t *testing.T) {
 	mux := http.NewServeMux()
-	RegisterAuthRoutes(mux, service.NewAuthService(config.Config{}), noopProtected)
+	RegisterAuthRoutes(mux, authservice.NewAuthService(config.Config{}), noopProtected)
 
 	tests := []string{`{"email":`, `{}`, `{"email":"a","password":"b"} {}`}
 	for _, body := range tests {
@@ -60,7 +60,7 @@ func TestLoginValidationErrors(t *testing.T) {
 
 func TestCreateAdminNotImplemented(t *testing.T) {
 	mux := http.NewServeMux()
-	RegisterAuthRoutes(mux, service.NewAuthService(config.Config{}), noopProtected)
+	RegisterAuthRoutes(mux, authservice.NewAuthService(config.Config{}), noopProtected)
 	req := httptest.NewRequest(http.MethodPost, "/v1/admins", nil)
 	res := httptest.NewRecorder()
 	mux.ServeHTTP(res, req)

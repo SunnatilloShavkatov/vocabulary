@@ -1,4 +1,4 @@
-package controller
+package vocabularycontroller
 
 import (
 	"bytes"
@@ -16,22 +16,22 @@ import (
 func noopProtected(next http.HandlerFunc) http.HandlerFunc { return next }
 
 type mockRepository struct {
-	items []service.VocabularyItem
+	items []vocabularyservice.VocabularyItem
 }
 
-func (m *mockRepository) Create(_ context.Context, word, translation, example string) (*service.VocabularyItem, error) {
-	item := service.VocabularyItem{ID: "test-id", Word: word, Translation: translation, Example: example, CreatedAt: time.Now()}
+func (m *mockRepository) Create(_ context.Context, word, translation, example string) (*vocabularyservice.VocabularyItem, error) {
+	item := vocabularyservice.VocabularyItem{ID: "test-id", Word: word, Translation: translation, Example: example, CreatedAt: time.Now()}
 	m.items = append(m.items, item)
 	return &item, nil
 }
 
-func (m *mockRepository) List(_ context.Context, _ string, _, _ int) ([]service.VocabularyItem, int, error) {
+func (m *mockRepository) List(_ context.Context, _ string, _, _ int) ([]vocabularyservice.VocabularyItem, int, error) {
 	return m.items, len(m.items), nil
 }
 
 func TestCreateVocabularySuccess(t *testing.T) {
 	mux := http.NewServeMux()
-	RegisterVocabularyRoutes(mux, service.NewVocabularyService(config.Config{}, &mockRepository{}), noopProtected)
+	RegisterVocabularyRoutes(mux, vocabularyservice.NewVocabularyService(config.Config{}, &mockRepository{}), noopProtected)
 	req := httptest.NewRequest(http.MethodPost, "/v1/vocabulary", bytes.NewBufferString(`{"word":"apple","translation":"olma"}`))
 	res := httptest.NewRecorder()
 	mux.ServeHTTP(res, req)
@@ -42,7 +42,7 @@ func TestCreateVocabularySuccess(t *testing.T) {
 
 func TestCreateVocabularyValidation(t *testing.T) {
 	mux := http.NewServeMux()
-	RegisterVocabularyRoutes(mux, service.NewVocabularyService(config.Config{}, &mockRepository{}), noopProtected)
+	RegisterVocabularyRoutes(mux, vocabularyservice.NewVocabularyService(config.Config{}, &mockRepository{}), noopProtected)
 	req := httptest.NewRequest(http.MethodPost, "/v1/vocabulary", bytes.NewBufferString(`{"word":""}`))
 	res := httptest.NewRecorder()
 	mux.ServeHTTP(res, req)
@@ -52,9 +52,9 @@ func TestCreateVocabularyValidation(t *testing.T) {
 }
 
 func TestListVocabulary(t *testing.T) {
-	repo := &mockRepository{items: []service.VocabularyItem{{ID: "1", Word: "apple", Translation: "olma"}}}
+	repo := &mockRepository{items: []vocabularyservice.VocabularyItem{{ID: "1", Word: "apple", Translation: "olma"}}}
 	mux := http.NewServeMux()
-	RegisterVocabularyRoutes(mux, service.NewVocabularyService(config.Config{}, repo), noopProtected)
+	RegisterVocabularyRoutes(mux, vocabularyservice.NewVocabularyService(config.Config{}, repo), noopProtected)
 	req := httptest.NewRequest(http.MethodGet, "/v1/vocabulary?page=2&limit=10", nil)
 	res := httptest.NewRecorder()
 	mux.ServeHTTP(res, req)

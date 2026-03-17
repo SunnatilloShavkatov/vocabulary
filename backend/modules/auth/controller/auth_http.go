@@ -1,4 +1,4 @@
-package controller
+package authcontroller
 
 import (
 	"encoding/json"
@@ -15,14 +15,14 @@ type authLoginRequest struct {
 	Password string `json:"password"`
 }
 
-func RegisterAuthRoutes(mux *http.ServeMux, svc *service.AuthService, protected func(http.HandlerFunc) http.HandlerFunc) {
+func RegisterAuthRoutes(mux *http.ServeMux, svc *authservice.AuthService, protected func(http.HandlerFunc) http.HandlerFunc) {
 	h := &AuthHandler{service: svc}
 	mux.HandleFunc("POST /v1/auth/login", h.login)
 	mux.HandleFunc("POST /v1/admins", protected(h.createAdmin))
 }
 
 type AuthHandler struct {
-	service *service.AuthService
+	service *authservice.AuthService
 }
 
 func (h *AuthHandler) login(w http.ResponseWriter, r *http.Request) {
@@ -49,12 +49,12 @@ func (h *AuthHandler) login(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	resp, err := h.service.Login(service.AuthLoginRequest{Email: req.Email, Password: req.Password})
+	resp, err := h.service.Login(authservice.AuthLoginRequest{Email: req.Email, Password: req.Password})
 	if err != nil {
 		switch {
-		case errors.Is(err, service.ErrBootstrapAdminNotConfigured):
+		case errors.Is(err, authservice.ErrBootstrapAdminNotConfigured):
 			writeAuthJSON(w, http.StatusServiceUnavailable, map[string]string{"error": err.Error()})
-		case errors.Is(err, service.ErrInvalidCredentials):
+		case errors.Is(err, authservice.ErrInvalidCredentials):
 			writeAuthJSON(w, http.StatusUnauthorized, map[string]string{"error": err.Error()})
 		default:
 			writeAuthJSON(w, http.StatusInternalServerError, map[string]string{"error": "failed to create access token"})

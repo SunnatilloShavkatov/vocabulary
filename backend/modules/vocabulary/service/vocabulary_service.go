@@ -1,4 +1,4 @@
-package service
+package vocabularyservice
 
 import (
 	"context"
