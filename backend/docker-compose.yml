@@ -56,14 +56,15 @@ services:
       - "8080:8080"
 
   gateway-test:
-    build:
-      context: .
-      dockerfile: Dockerfile
+    image: golang:1.23-alpine
+    working_dir: /app
+    volumes:
+      - .:/app
     command:
       [
         "sh",
         "-c",
-        "cd /app/gateway && go test ./... && cd /app/libs/shared && go test ./... && cd /app/modules/auth && go test ./... && cd /app/modules/vocabulary && go test ./...",
+        "go work sync && go test ./gateway/... ./libs/... ./modules/...",
       ]
     profiles: ["test"]
 

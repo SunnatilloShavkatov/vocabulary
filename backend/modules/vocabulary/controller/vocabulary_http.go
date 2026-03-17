@@ -1,6 +1,7 @@
 package vocabularycontroller
 
 import (
+	"context"
 	"encoding/json"
 	"errors"
 	"io"
@@ -12,11 +13,12 @@ import (
 )
 
 type VocabularyHandler struct {
-	service *vocabularyservice.VocabularyService
+	service           *vocabularyservice.VocabularyService
+	createdByResolver func(context.Context) (string, bool)
 }
 
-func RegisterVocabularyRoutes(mux *http.ServeMux, svc *vocabularyservice.VocabularyService, protected func(http.HandlerFunc) http.HandlerFunc) {
-	h := &VocabularyHandler{service: svc}
+func RegisterVocabularyRoutes(mux *http.ServeMux, svc *vocabularyservice.VocabularyService, protected func(http.HandlerFunc) http.HandlerFunc, createdByResolver func(context.Context) (string, bool)) {
+	h := &VocabularyHandler{service: svc, createdByResolver: createdByResolver}
 	mux.HandleFunc("GET /v1/vocabulary", h.list)
 	mux.HandleFunc("POST /v1/vocabulary", protected(h.create))
 }
@@ -50,7 +52,14 @@ func (h *VocabularyHandler) create(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	item, err := h.service.Create(r.Context(), req.Word, req.Translation, req.Example)
+	createdBy := ""
+	if h.createdByResolver != nil {
+		if subject, ok := h.createdByResolver(r.Context()); ok {
+			createdBy = subject
+		}
+	}
+
+	item, err := h.service.Create(r.Context(), req.Word, req.Translation, req.Example, createdBy)
 	if err != nil {
 		writeVocabularyJSON(w, http.StatusInternalServerError, map[string]string{"error": "failed to create vocabulary"})
 		return

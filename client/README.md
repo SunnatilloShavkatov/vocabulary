@@ -1,7 +1,19 @@
-# Oson Vocabulary client
+# Oson Vocabulary Mobile
 
-Bu papka Flutter client app uchun ajratilgan.
+Phase 4 mobile client.
 
-Phase 1 da faqat struktura tayyorlandi.
-Phase 4 da welcome, vocabulary list va search UI implement qilinadi.
+Current MVP pages:
 
+- Welcome page
+- Vocabulary list
+- Search input (`GET /v1/vocabulary`)
+
+## Run
+
+```bash
+cd /Users/sshovkatov/Projects/Vocabulary/client
+flutter pub get
+flutter run --dart-define=API_BASE_URL=http://localhost:8080
+```
+
+If `API_BASE_URL` is not provided, default is `http://localhost:8080`.

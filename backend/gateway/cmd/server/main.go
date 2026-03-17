@@ -31,7 +31,7 @@ func main() {
 	authRepo := authrepository.NewAuthPgxRepository(pool)
 	authSvc := authservice.NewAuthService(cfg, authRepo)
 	vocabularySvc := vocabularyservice.NewVocabularyService(cfg, vocabRepo)
-	router := gwhttp.NewGatewayRouter(cfg.JWT.Secret, authSvc, vocabularySvc)
+	router := gwhttp.NewGatewayRouter(cfg.JWT.Secret, cfg.CORSAllowedOrigins, authSvc, vocabularySvc)
 
 	addr := fmt.Sprintf(":%d", cfg.Server.Port)
 	log.Printf("gateway listening on %s", addr)

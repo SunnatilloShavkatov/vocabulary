@@ -10,6 +10,7 @@ import (
 	"time"
 
 	jwt "github.com/golang-jwt/jwt/v5"
+	"golang.org/x/crypto/bcrypt"
 	"vocabulary/backend/libs/shared/config"
 	"vocabulary/backend/modules/auth/service"
 )
@@ -17,7 +18,8 @@ import (
 func noopProtected(next http.HandlerFunc) http.HandlerFunc { return next }
 
 type mockAuthRepository struct {
-	admins map[string]authservice.AuthAdmin
+	admins      map[string]authservice.AuthAdmin
+	credentials map[string]authservice.AuthAdminCredentials
 }
 
 func (m *mockAuthRepository) CreateAdmin(_ context.Context, email, _ string, role string) (*authservice.AuthAdmin, error) {
@@ -34,6 +36,21 @@ func (m *mockAuthRepository) CreateAdmin(_ context.Context, email, _ string, rol
 		CreatedAt: time.Now().UTC(),
 	}
 	m.admins[email] = admin
+	if m.credentials == nil {
+		m.credentials = map[string]authservice.AuthAdminCredentials{}
+	}
+	m.credentials[email] = authservice.AuthAdminCredentials{AuthAdmin: admin, PasswordHash: ""}
+	return &admin, nil
+}
+
+func (m *mockAuthRepository) FindAdminByEmail(_ context.Context, email string) (*authservice.AuthAdminCredentials, error) {
+	if m.credentials == nil {
+		return nil, authservice.ErrAuthAdminNotFound
+	}
+	admin, ok := m.credentials[email]
+	if !ok {
+		return nil, authservice.ErrAuthAdminNotFound
+	}
 	return &admin, nil
 }
 
@@ -78,6 +95,36 @@ func TestLoginValidationErrors(t *testing.T) {
 		if res.Code != http.StatusBadRequest {
 			t.Fatalf("expected status %d, got %d", http.StatusBadRequest, res.Code)
 		}
+	}
+}
+
+func TestLoginSuccessWithDBAdmin(t *testing.T) {
+	mux := http.NewServeMux()
+	hash, err := bcrypt.GenerateFromPassword([]byte("password123"), bcrypt.DefaultCost)
+	if err != nil {
+		t.Fatalf("failed to hash password: %v", err)
+	}
+	repo := &mockAuthRepository{
+		credentials: map[string]authservice.AuthAdminCredentials{
+			"db-admin@example.com": {
+				AuthAdmin: authservice.AuthAdmin{
+					ID:    "db-admin-id",
+					Email: "db-admin@example.com",
+					Role:  "admin",
+				},
+				PasswordHash: string(hash),
+			},
+		},
+	}
+	svc := authservice.NewAuthService(config.Config{JWT: config.JWTConfig{Secret: "test-secret", AccessTTLMinutes: 5}}, repo)
+	RegisterAuthRoutes(mux, svc, noopProtected)
+
+	req := httptest.NewRequest(http.MethodPost, "/v1/auth/login", bytes.NewBufferString(`{"email":"db-admin@example.com","password":"password123"}`))
+	res := httptest.NewRecorder()
+	mux.ServeHTTP(res, req)
+
+	if res.Code != http.StatusOK {
+		t.Fatalf("expected status %d, got %d: %s", http.StatusOK, res.Code, res.Body.String())
 	}
 }
 

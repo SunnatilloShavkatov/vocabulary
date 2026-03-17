@@ -15,7 +15,7 @@ import (
 // mockVocabularyRepo satisfies vocabulary.VocabularyRepository without a real DB.
 type mockVocabularyRepo struct{}
 
-func (m *mockVocabularyRepo) Create(_ context.Context, word, translation, _ string) (*vocabularyservice.VocabularyItem, error) {
+func (m *mockVocabularyRepo) Create(_ context.Context, word, translation, _ string, _ *string) (*vocabularyservice.VocabularyItem, error) {
 	return &vocabularyservice.VocabularyItem{ID: "test-id", Word: word, Translation: translation}, nil
 }
 
@@ -105,6 +105,6 @@ func newTestRouter() *GatewayRouter {
 	}
 	authSvc := authservice.NewAuthService(cfg)
 	vocabularySvc := vocabularyservice.NewVocabularyService(cfg, &mockVocabularyRepo{})
-	return NewGatewayRouter("test-secret", authSvc, vocabularySvc)
+	return NewGatewayRouter("test-secret", "*", authSvc, vocabularySvc)
 }
 

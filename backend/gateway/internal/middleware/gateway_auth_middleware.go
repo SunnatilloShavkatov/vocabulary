@@ -54,6 +54,18 @@ func RequireGatewayAdmin(secret string) func(http.HandlerFunc) http.HandlerFunc 
 	}
 }
 
+func GetGatewayAdminSubject(ctx context.Context) (string, bool) {
+	claims, ok := ctx.Value(GatewayClaimsKey).(jwt.MapClaims)
+	if !ok {
+		return "", false
+	}
+	sub, ok := claims["sub"].(string)
+	if !ok || strings.TrimSpace(sub) == "" {
+		return "", false
+	}
+	return strings.TrimSpace(sub), true
+}
+
 func writeGatewayJSON(w http.ResponseWriter, status int, payload any) {
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(status)

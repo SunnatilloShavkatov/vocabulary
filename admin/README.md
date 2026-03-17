@@ -1,17 +1,19 @@
-# admin
+# Oson Vocabulary Admin
 
-A new Flutter project.
+Phase 3 admin web client.
 
-## Getting Started
+Current MVP pages:
 
-This project is a starting point for a Flutter application.
+- Login page (`POST /v1/auth/login`)
+- Add vocabulary form (`POST /v1/vocabulary`)
+- Add admin form (`POST /v1/admins`)
 
-A few resources to get you started if this is your first Flutter project:
+## Run
 
-- [Learn Flutter](https://docs.flutter.dev/get-started/learn-flutter)
-- [Write your first Flutter app](https://docs.flutter.dev/get-started/codelab)
-- [Flutter learning resources](https://docs.flutter.dev/reference/learning-resources)
+```bash
+cd /Users/sshovkatov/Projects/Vocabulary/admin
+flutter pub get
+flutter run -d chrome --dart-define=API_BASE_URL=http://localhost:8080
+```
 
-For help getting started with Flutter development, view the
-[online documentation](https://docs.flutter.dev/), which offers tutorials,
-samples, guidance on mobile development, and a full API reference.
+If `API_BASE_URL` is not provided, default is `http://localhost:8080`.

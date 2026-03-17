@@ -22,12 +22,12 @@ Deliverable:
 - Build bo'ladigan backend skeleton
 - Tasdiqlangan API draft
 
-## Phase 2 - Backend MVP (1 hafta) [Started]
+## Phase 2 - Backend MVP (1 hafta) [Done]
 
 - [x] `auth` login endpoint (bootstrap admin + JWT)
 - [x] `vocabulary` create/list/search endpointlar
 - [x] Admin create endpoint
-- [ ] Basic middleware va logging
+- [x] Basic middleware va logging
 
 Phase 2 next action order:
 
@@ -41,23 +41,29 @@ Deliverable:
 
 - API locally testdan o'tadi
 
-## Phase 3 - Admin Web (1 hafta)
+## Phase 3 - Admin Web (1 hafta) [Done]
 
-- Login page
-- Add vocabulary form
-- Add admin form
-- API integration
+- [x] Login page
+- [x] Add vocabulary form
+- [x] Add admin form
+- [x] API integration (MVP)
 
 Deliverable:
 
 - Admin webdan real ma'lumot qo'shish ishlaydi
 
-## Phase 4 - Client App + Stabilization (1 hafta)
+## Phase 4 - Client App + Stabilization (1 hafta) [Started]
 
-- Welcome page
-- Vocabulary list + search
-- Error/loading holatlari
-- QA, bugfix, release prep
+- [x] Welcome page
+- [x] Vocabulary list + search
+- [x] Error/loading holatlari
+- [x] CORS middleware (admin web brauzerdan API'ga murojaat uchun)
+- [x] Dockerfile multi-stage binary build (go run o'rniga)
+- [x] docker-compose.yml `gateway-test` profili tuzatildi
+- [x] `.env.example` `CORS_ALLOWED_ORIGINS` bilan yangilandi
+- [x] `openapi.yaml` v0.2.0 — barcha endpointlar to'liq schema bilan freeze qilindi
+- [x] `oson_vocabulary_mobile` Android/iOS scaffold to'g'irlandi
+- [ ] QA: Docker Compose bilan end-to-end smoke test
 
 Deliverable:
 

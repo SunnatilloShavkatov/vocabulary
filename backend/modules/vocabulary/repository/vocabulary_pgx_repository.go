@@ -15,14 +15,14 @@ func NewVocabularyPgxRepository(pool *pgxpool.Pool) *VocabularyPgxRepository {
 	return &VocabularyPgxRepository{pool: pool}
 }
 
-func (r *VocabularyPgxRepository) Create(ctx context.Context, word, translation, example string) (*vocabularyservice.VocabularyItem, error) {
+func (r *VocabularyPgxRepository) Create(ctx context.Context, word, translation, example string, createdBy *string) (*vocabularyservice.VocabularyItem, error) {
 	const q = `
-		INSERT INTO vocabularies (id, word, translation, example, created_at)
-		VALUES (gen_random_uuid(), $1, $2, NULLIF($3, ''), NOW())
+		INSERT INTO vocabularies (id, word, translation, example, created_by, created_at)
+		VALUES (gen_random_uuid(), $1, $2, NULLIF($3, ''), $4, NOW())
 		RETURNING id, word, translation, COALESCE(example, ''), created_at`
 
 	var item vocabularyservice.VocabularyItem
-	err := r.pool.QueryRow(ctx, q, word, translation, example).
+	err := r.pool.QueryRow(ctx, q, word, translation, example, createdBy).
 		Scan(&item.ID, &item.Word, &item.Translation, &item.Example, &item.CreatedAt)
 	if err != nil {
 		return nil, err

@@ -41,8 +41,14 @@ type AuthCreateAdminRequest struct {
 	Role     string
 }
 
+type AuthAdminCredentials struct {
+	AuthAdmin
+	PasswordHash string
+}
+
 type AuthRepository interface {
 	CreateAdmin(ctx context.Context, email, passwordHash, role string) (*AuthAdmin, error)
+	FindAdminByEmail(ctx context.Context, email string) (*AuthAdminCredentials, error)
 }
 
 var (
@@ -53,6 +59,7 @@ var (
 	ErrAuthInvalidEmail            = errors.New("email is invalid")
 	ErrAuthInvalidPassword         = errors.New("password must be between 8 and 72 characters")
 	ErrAuthInvalidRole             = errors.New("unsupported role")
+	ErrAuthAdminNotFound           = errors.New("admin not found")
 )
 
 func NewAuthService(cfg config.Config, repos ...AuthRepository) *AuthService {
@@ -64,21 +71,43 @@ func NewAuthService(cfg config.Config, repos ...AuthRepository) *AuthService {
 }
 
 func (s *AuthService) Login(req AuthLoginRequest) (AuthLoginResponse, error) {
+	email := strings.TrimSpace(req.Email)
+	if email == "" || req.Password == "" {
+		return AuthLoginResponse{}, ErrInvalidCredentials
+	}
+
+	if s.repo != nil {
+		admin, err := s.repo.FindAdminByEmail(context.Background(), email)
+		if err == nil {
+			if bcrypt.CompareHashAndPassword([]byte(admin.PasswordHash), []byte(req.Password)) != nil {
+				return AuthLoginResponse{}, ErrInvalidCredentials
+			}
+			return s.createToken(admin.ID, admin.Email, admin.Role)
+		}
+		if !errors.Is(err, ErrAuthAdminNotFound) {
+			return AuthLoginResponse{}, err
+		}
+	}
+
 	if strings.TrimSpace(s.cfg.BootstrapAdmin.Email) == "" || s.cfg.BootstrapAdmin.Password == "" {
 		return AuthLoginResponse{}, ErrBootstrapAdminNotConfigured
 	}
 
-	if !strings.EqualFold(strings.TrimSpace(req.Email), s.cfg.BootstrapAdmin.Email) ||
+	if !strings.EqualFold(email, s.cfg.BootstrapAdmin.Email) ||
 		subtle.ConstantTimeCompare([]byte(req.Password), []byte(s.cfg.BootstrapAdmin.Password)) != 1 {
 		return AuthLoginResponse{}, ErrInvalidCredentials
 	}
 
+	return s.createToken("bootstrap-admin", s.cfg.BootstrapAdmin.Email, "admin")
+}
+
+func (s *AuthService) createToken(subject, email, role string) (AuthLoginResponse, error) {
 	expiresIn := s.accessTokenTTLSeconds()
 	now := time.Now().UTC()
 	claims := jwt.MapClaims{
-		"sub":   "bootstrap-admin",
-		"email": s.cfg.BootstrapAdmin.Email,
-		"role":  "admin",
+		"sub":   subject,
+		"email": email,
+		"role":  role,
 		"iat":   now.Unix(),
 		"exp":   now.Add(time.Duration(expiresIn) * time.Second).Unix(),
 	}

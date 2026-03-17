@@ -1,122 +1,373 @@
+import 'dart:convert';
+
 import 'package:flutter/material.dart';
+import 'package:http/http.dart' as http;
 
 void main() {
-  runApp(const MyApp());
+  runApp(const OsonVocabularyAdminApp());
 }
 
-class MyApp extends StatelessWidget {
-  const MyApp({super.key});
+class OsonVocabularyAdminApp extends StatelessWidget {
+  const OsonVocabularyAdminApp({super.key});
 
-  // This widget is the root of your application.
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
-      title: 'Flutter Demo',
-      theme: ThemeData(
-        // This is the theme of your application.
-        //
-        // TRY THIS: Try running your application with "flutter run". You'll see
-        // the application has a purple toolbar. Then, without quitting the app,
-        // try changing the seedColor in the colorScheme below to Colors.green
-        // and then invoke "hot reload" (save your changes or press the "hot
-        // reload" button in a Flutter-supported IDE, or press "r" if you used
-        // the command line to start the app).
-        //
-        // Notice that the counter didn't reset back to zero; the application
-        // state is not lost during the reload. To reset the state, use hot
-        // restart instead.
-        //
-        // This works for code too, not just values: Most code changes can be
-        // tested with just a hot reload.
-        colorScheme: .fromSeed(seedColor: Colors.deepPurple),
-      ),
-      home: const MyHomePage(title: 'Flutter Demo Home Page'),
+      title: 'Oson Vocabulary Admin',
+      theme: ThemeData(colorScheme: ColorScheme.fromSeed(seedColor: Colors.indigo)),
+      home: const AdminShell(),
     );
   }
 }
 
-class MyHomePage extends StatefulWidget {
-  const MyHomePage({super.key, required this.title});
-
-  // This widget is the home page of your application. It is stateful, meaning
-  // that it has a State object (defined below) that contains fields that affect
-  // how it looks.
-
-  // This class is the configuration for the state. It holds the values (in this
-  // case the title) provided by the parent (in this case the App widget) and
-  // used by the build method of the State. Fields in a Widget subclass are
-  // always marked "final".
-
-  final String title;
+class AdminShell extends StatefulWidget {
+  const AdminShell({super.key});
 
   @override
-  State<MyHomePage> createState() => _MyHomePageState();
+  State<AdminShell> createState() => _AdminShellState();
 }
 
-class _MyHomePageState extends State<MyHomePage> {
-  int _counter = 0;
+class _AdminShellState extends State<AdminShell> {
+  final _api = AdminApiClient();
+  String? _token;
+  String? _error;
 
-  void _incrementCounter() {
+  Future<void> _login(String email, String password) async {
+    setState(() => _error = null);
+    try {
+      final token = await _api.login(email: email, password: password);
+      setState(() => _token = token);
+    } catch (e) {
+      setState(() => _error = e.toString());
+    }
+  }
+
+  void _logout() {
     setState(() {
-      // This call to setState tells the Flutter framework that something has
-      // changed in this State, which causes it to rerun the build method below
-      // so that the display can reflect the updated values. If we changed
-      // _counter without calling setState(), then the build method would not be
-      // called again, and so nothing would appear to happen.
-      _counter++;
+      _token = null;
+      _error = null;
     });
   }
 
   @override
   Widget build(BuildContext context) {
-    // This method is rerun every time setState is called, for instance as done
-    // by the _incrementCounter method above.
-    //
-    // The Flutter framework has been optimized to make rerunning build methods
-    // fast, so that you can just rebuild anything that needs updating rather
-    // than having to individually change instances of widgets.
+    if (_token == null) {
+      return LoginPage(onLogin: _login, errorText: _error);
+    }
+    return AdminDashboardPage(api: _api, token: _token!, onLogout: _logout);
+  }
+}
+
+class LoginPage extends StatefulWidget {
+  const LoginPage({super.key, required this.onLogin, this.errorText});
+
+  final Future<void> Function(String email, String password) onLogin;
+  final String? errorText;
+
+  @override
+  State<LoginPage> createState() => _LoginPageState();
+}
+
+class _LoginPageState extends State<LoginPage> {
+  final _emailController = TextEditingController();
+  final _passwordController = TextEditingController();
+  bool _isLoading = false;
+
+  @override
+  void dispose() {
+    _emailController.dispose();
+    _passwordController.dispose();
+    super.dispose();
+  }
+
+  Future<void> _submit() async {
+    setState(() => _isLoading = true);
+    await widget.onLogin(_emailController.text.trim(), _passwordController.text);
+    if (mounted) {
+      setState(() => _isLoading = false);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(
-        // TRY THIS: Try changing the color here to a specific color (to
-        // Colors.amber, perhaps?) and trigger a hot reload to see the AppBar
-        // change color while the other colors stay the same.
-        backgroundColor: Theme.of(context).colorScheme.inversePrimary,
-        // Here we take the value from the MyHomePage object that was created by
-        // the App.build method, and use it to set our appbar title.
-        title: Text(widget.title),
-      ),
+      appBar: AppBar(title: const Text('Oson Vocabulary Admin')),
       body: Center(
-        // Center is a layout widget. It takes a single child and positions it
-        // in the middle of the parent.
-        child: Column(
-          // Column is also a layout widget. It takes a list of children and
-          // arranges them vertically. By default, it sizes itself to fit its
-          // children horizontally, and tries to be as tall as its parent.
-          //
-          // Column has various properties to control how it sizes itself and
-          // how it positions its children. Here we use mainAxisAlignment to
-          // center the children vertically; the main axis here is the vertical
-          // axis because Columns are vertical (the cross axis would be
-          // horizontal).
-          //
-          // TRY THIS: Invoke "debug painting" (choose the "Toggle Debug Paint"
-          // action in the IDE, or press "p" in the console), to see the
-          // wireframe for each widget.
-          mainAxisAlignment: .center,
-          children: [
-            const Text('You have pushed the button this many times:'),
-            Text(
-              '$_counter',
-              style: Theme.of(context).textTheme.headlineMedium,
+        child: SizedBox(
+          width: 420,
+          child: Card(
+            child: Padding(
+              padding: const EdgeInsets.all(16),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  TextField(controller: _emailController, decoration: const InputDecoration(labelText: 'Email')),
+                  const SizedBox(height: 12),
+                  TextField(
+                    controller: _passwordController,
+                    decoration: const InputDecoration(labelText: 'Password'),
+                    obscureText: true,
+                  ),
+                  const SizedBox(height: 16),
+                  if (widget.errorText != null)
+                    Padding(
+                      padding: const EdgeInsets.only(bottom: 8),
+                      child: Text(widget.errorText!, style: const TextStyle(color: Colors.red)),
+                    ),
+                  SizedBox(
+                    width: double.infinity,
+                    child: ElevatedButton(
+                      onPressed: _isLoading ? null : _submit,
+                      child: Text(_isLoading ? 'Signing in...' : 'Login'),
+                    ),
+                  ),
+                ],
+              ),
             ),
-          ],
+          ),
         ),
-      ),
-      floatingActionButton: FloatingActionButton(
-        onPressed: _incrementCounter,
-        tooltip: 'Increment',
-        child: const Icon(Icons.add),
       ),
     );
   }
 }
+
+class AdminDashboardPage extends StatefulWidget {
+  const AdminDashboardPage({super.key, required this.api, required this.token, required this.onLogout});
+
+  final AdminApiClient api;
+  final String token;
+  final VoidCallback onLogout;
+
+  @override
+  State<AdminDashboardPage> createState() => _AdminDashboardPageState();
+}
+
+class _AdminDashboardPageState extends State<AdminDashboardPage> {
+  int _tab = 0;
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      appBar: AppBar(
+        title: const Text('Oson Vocabulary Admin Dashboard'),
+        actions: [IconButton(onPressed: widget.onLogout, icon: const Icon(Icons.logout))],
+      ),
+      body: Row(
+        children: [
+          NavigationRail(
+            selectedIndex: _tab,
+            onDestinationSelected: (v) => setState(() => _tab = v),
+            labelType: NavigationRailLabelType.all,
+            destinations: const [
+              NavigationRailDestination(icon: Icon(Icons.translate), label: Text('Add Vocabulary')),
+              NavigationRailDestination(icon: Icon(Icons.admin_panel_settings), label: Text('Add Admin')),
+            ],
+          ),
+          const VerticalDivider(width: 1),
+          Expanded(
+            child: Padding(
+              padding: const EdgeInsets.all(16),
+              child: _tab == 0
+                  ? AddVocabularyForm(api: widget.api, token: widget.token)
+                  : AddAdminForm(api: widget.api, token: widget.token),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class AddVocabularyForm extends StatefulWidget {
+  const AddVocabularyForm({super.key, required this.api, required this.token});
+
+  final AdminApiClient api;
+  final String token;
+
+  @override
+  State<AddVocabularyForm> createState() => _AddVocabularyFormState();
+}
+
+class _AddVocabularyFormState extends State<AddVocabularyForm> {
+  final _wordController = TextEditingController();
+  final _translationController = TextEditingController();
+  final _exampleController = TextEditingController();
+  String? _message;
+  bool _isLoading = false;
+
+  @override
+  void dispose() {
+    _wordController.dispose();
+    _translationController.dispose();
+    _exampleController.dispose();
+    super.dispose();
+  }
+
+  Future<void> _submit() async {
+    setState(() {
+      _isLoading = true;
+      _message = null;
+    });
+    try {
+      await widget.api.createVocabulary(
+        token: widget.token,
+        word: _wordController.text,
+        translation: _translationController.text,
+        example: _exampleController.text,
+      );
+      setState(() => _message = 'Vocabulary added successfully.');
+      _wordController.clear();
+      _translationController.clear();
+      _exampleController.clear();
+    } catch (e) {
+      setState(() => _message = e.toString());
+    } finally {
+      if (mounted) {
+        setState(() => _isLoading = false);
+      }
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        TextField(controller: _wordController, decoration: const InputDecoration(labelText: 'Word')),
+        const SizedBox(height: 12),
+        TextField(controller: _translationController, decoration: const InputDecoration(labelText: 'Translation')),
+        const SizedBox(height: 12),
+        TextField(controller: _exampleController, decoration: const InputDecoration(labelText: 'Example')),
+        const SizedBox(height: 16),
+        ElevatedButton(onPressed: _isLoading ? null : _submit, child: Text(_isLoading ? 'Saving...' : 'Save')),
+        if (_message != null) ...[
+          const SizedBox(height: 12),
+          Text(_message!),
+        ],
+      ],
+    );
+  }
+}
+
+class AddAdminForm extends StatefulWidget {
+  const AddAdminForm({super.key, required this.api, required this.token});
+
+  final AdminApiClient api;
+  final String token;
+
+  @override
+  State<AddAdminForm> createState() => _AddAdminFormState();
+}
+
+class _AddAdminFormState extends State<AddAdminForm> {
+  final _emailController = TextEditingController();
+  final _passwordController = TextEditingController();
+  String? _message;
+  bool _isLoading = false;
+
+  @override
+  void dispose() {
+    _emailController.dispose();
+    _passwordController.dispose();
+    super.dispose();
+  }
+
+  Future<void> _submit() async {
+    setState(() {
+      _isLoading = true;
+      _message = null;
+    });
+    try {
+      await widget.api.createAdmin(token: widget.token, email: _emailController.text, password: _passwordController.text);
+      setState(() => _message = 'Admin added successfully.');
+      _emailController.clear();
+      _passwordController.clear();
+    } catch (e) {
+      setState(() => _message = e.toString());
+    } finally {
+      if (mounted) {
+        setState(() => _isLoading = false);
+      }
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        TextField(controller: _emailController, decoration: const InputDecoration(labelText: 'Admin email')),
+        const SizedBox(height: 12),
+        TextField(
+          controller: _passwordController,
+          decoration: const InputDecoration(labelText: 'Admin password'),
+          obscureText: true,
+        ),
+        const SizedBox(height: 16),
+        ElevatedButton(onPressed: _isLoading ? null : _submit, child: Text(_isLoading ? 'Saving...' : 'Save')),
+        if (_message != null) ...[
+          const SizedBox(height: 12),
+          Text(_message!),
+        ],
+      ],
+    );
+  }
+}
+
+class AdminApiClient {
+  AdminApiClient({http.Client? client}) : _client = client ?? http.Client();
+
+  final http.Client _client;
+  final String _baseUrl = const String.fromEnvironment('API_BASE_URL', defaultValue: 'http://localhost:8080');
+
+  Future<String> login({required String email, required String password}) async {
+    final res = await _client.post(
+      Uri.parse('$_baseUrl/v1/auth/login'),
+      headers: {'Content-Type': 'application/json'},
+      body: jsonEncode({'email': email, 'password': password}),
+    );
+    if (res.statusCode != 200) {
+      throw Exception(_extractError(res.body, fallback: 'Login failed'));
+    }
+    final map = jsonDecode(res.body) as Map<String, dynamic>;
+    final token = map['access_token'] as String?;
+    if (token == null || token.isEmpty) {
+      throw Exception('Login response does not contain access_token');
+    }
+    return token;
+  }
+
+  Future<void> createVocabulary({required String token, required String word, required String translation, String? example}) async {
+    final res = await _client.post(
+      Uri.parse('$_baseUrl/v1/vocabulary'),
+      headers: {'Content-Type': 'application/json', 'Authorization': 'Bearer $token'},
+      body: jsonEncode({'word': word, 'translation': translation, 'example': example ?? ''}),
+    );
+    if (res.statusCode != 201) {
+      throw Exception(_extractError(res.body, fallback: 'Create vocabulary failed'));
+    }
+  }
+
+  Future<void> createAdmin({required String token, required String email, required String password}) async {
+    final res = await _client.post(
+      Uri.parse('$_baseUrl/v1/admins'),
+      headers: {'Content-Type': 'application/json', 'Authorization': 'Bearer $token'},
+      body: jsonEncode({'email': email, 'password': password}),
+    );
+    if (res.statusCode != 201) {
+      throw Exception(_extractError(res.body, fallback: 'Create admin failed'));
+    }
+  }
+
+  String _extractError(String body, {required String fallback}) {
+    try {
+      final map = jsonDecode(body) as Map<String, dynamic>;
+      final message = map['error'] as String?;
+      if (message != null && message.isNotEmpty) {
+        return message;
+      }
+    } catch (_) {}
+    return fallback;
+  }
+}
+

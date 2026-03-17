@@ -70,6 +70,7 @@ func Load() (Config, error) {
 			Email:    envString("BOOTSTRAP_ADMIN_EMAIL", ""),
 			Password: envString("BOOTSTRAP_ADMIN_PASSWORD", ""),
 		},
+		CORSAllowedOrigins: envString("CORS_ALLOWED_ORIGINS", "*"),
 	}
 
 	return cfg, nil
