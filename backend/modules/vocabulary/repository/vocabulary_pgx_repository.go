@@ -1,4 +1,4 @@
-package repository
+package vocabularyrepository
 
 import (
 	"context"
@@ -15,13 +15,13 @@ func NewVocabularyPgxRepository(pool *pgxpool.Pool) *VocabularyPgxRepository {
 	return &VocabularyPgxRepository{pool: pool}
 }
 
-func (r *VocabularyPgxRepository) Create(ctx context.Context, word, translation, example string) (*service.VocabularyItem, error) {
+func (r *VocabularyPgxRepository) Create(ctx context.Context, word, translation, example string) (*vocabularyservice.VocabularyItem, error) {
 	const q = `
 		INSERT INTO vocabularies (id, word, translation, example, created_at)
 		VALUES (gen_random_uuid(), $1, $2, NULLIF($3, ''), NOW())
 		RETURNING id, word, translation, COALESCE(example, ''), created_at`
 
-	var item service.VocabularyItem
+	var item vocabularyservice.VocabularyItem
 	err := r.pool.QueryRow(ctx, q, word, translation, example).
 		Scan(&item.ID, &item.Word, &item.Translation, &item.Example, &item.CreatedAt)
 	if err != nil {
@@ -30,7 +30,7 @@ func (r *VocabularyPgxRepository) Create(ctx context.Context, word, translation,
 	return &item, nil
 }
 
-func (r *VocabularyPgxRepository) List(ctx context.Context, search string, page, limit int) ([]service.VocabularyItem, int, error) {
+func (r *VocabularyPgxRepository) List(ctx context.Context, search string, page, limit int) ([]vocabularyservice.VocabularyItem, int, error) {
 	const countQ = `
 		SELECT COUNT(*) FROM vocabularies
 		WHERE ($1 = '' OR word ILIKE '%' || $1 || '%' OR translation ILIKE '%' || $1 || '%')`
@@ -53,9 +53,9 @@ func (r *VocabularyPgxRepository) List(ctx context.Context, search string, page,
 	}
 	defer rows.Close()
 
-	var items []service.VocabularyItem
+	var items []vocabularyservice.VocabularyItem
 	for rows.Next() {
-		var item service.VocabularyItem
+		var item vocabularyservice.VocabularyItem
 		if err := rows.Scan(&item.ID, &item.Word, &item.Translation, &item.Example, &item.CreatedAt); err != nil {
 			return nil, 0, err
 		}

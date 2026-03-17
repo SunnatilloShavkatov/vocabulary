@@ -9,9 +9,10 @@ import (
 	gwhttp "vocabulary/backend/gateway/internal/http"
 	"vocabulary/backend/libs/shared/config"
 	"vocabulary/backend/libs/shared/db"
-	authservice "vocabulary/backend/modules/auth/service"
-	vocabularyrepo "vocabulary/backend/modules/vocabulary/repository"
-	vocabularyservice "vocabulary/backend/modules/vocabulary/service"
+	"vocabulary/backend/modules/auth/repository"
+	"vocabulary/backend/modules/auth/service"
+	"vocabulary/backend/modules/vocabulary/repository"
+	"vocabulary/backend/modules/vocabulary/service"
 )
 
 func main() {
@@ -26,8 +27,9 @@ func main() {
 	}
 	defer pool.Close()
 
-	vocabRepo := vocabularyrepo.NewVocabularyPgxRepository(pool)
-	authSvc := authservice.NewAuthService(cfg)
+	vocabRepo := vocabularyrepository.NewVocabularyPgxRepository(pool)
+	authRepo := authrepository.NewAuthPgxRepository(pool)
+	authSvc := authservice.NewAuthService(cfg, authRepo)
 	vocabularySvc := vocabularyservice.NewVocabularyService(cfg, vocabRepo)
 	router := gwhttp.NewGatewayRouter(cfg.JWT.Secret, authSvc, vocabularySvc)
 

@@ -15,6 +15,12 @@ type authLoginRequest struct {
 	Password string `json:"password"`
 }
 
+type authCreateAdminRequest struct {
+	Email    string `json:"email"`
+	Password string `json:"password"`
+	Role     string `json:"role,omitempty"`
+}
+
 func RegisterAuthRoutes(mux *http.ServeMux, svc *authservice.AuthService, protected func(http.HandlerFunc) http.HandlerFunc) {
 	h := &AuthHandler{service: svc}
 	mux.HandleFunc("POST /v1/auth/login", h.login)
@@ -65,8 +71,46 @@ func (h *AuthHandler) login(w http.ResponseWriter, r *http.Request) {
 	writeAuthJSON(w, http.StatusOK, resp)
 }
 
-func (h *AuthHandler) createAdmin(w http.ResponseWriter, _ *http.Request) {
-	writeAuthJSON(w, http.StatusNotImplemented, map[string]string{"module": "auth", "error": "not implemented"})
+func (h *AuthHandler) createAdmin(w http.ResponseWriter, r *http.Request) {
+	if h.service == nil {
+		writeAuthJSON(w, http.StatusInternalServerError, map[string]string{"error": "service not initialized"})
+		return
+	}
+
+	var req authCreateAdminRequest
+	dec := json.NewDecoder(r.Body)
+	dec.DisallowUnknownFields()
+	if err := dec.Decode(&req); err != nil {
+		writeAuthJSON(w, http.StatusBadRequest, map[string]string{"error": "invalid request body"})
+		return
+	}
+	if err := dec.Decode(&struct{}{}); !errors.Is(err, io.EOF) {
+		writeAuthJSON(w, http.StatusBadRequest, map[string]string{"error": "invalid request body"})
+		return
+	}
+
+	admin, err := h.service.CreateAdmin(r.Context(), authservice.AuthCreateAdminRequest{
+		Email:    req.Email,
+		Password: req.Password,
+		Role:     req.Role,
+	})
+	if err != nil {
+		switch {
+		case errors.Is(err, authservice.ErrAuthInvalidEmail),
+			errors.Is(err, authservice.ErrAuthInvalidPassword),
+			errors.Is(err, authservice.ErrAuthInvalidRole):
+			writeAuthJSON(w, http.StatusBadRequest, map[string]string{"error": err.Error()})
+		case errors.Is(err, authservice.ErrAuthAdminAlreadyExists):
+			writeAuthJSON(w, http.StatusConflict, map[string]string{"error": err.Error()})
+		case errors.Is(err, authservice.ErrAuthRepoNotConfigured):
+			writeAuthJSON(w, http.StatusServiceUnavailable, map[string]string{"error": err.Error()})
+		default:
+			writeAuthJSON(w, http.StatusInternalServerError, map[string]string{"error": "failed to create admin"})
+		}
+		return
+	}
+
+	writeAuthJSON(w, http.StatusCreated, admin)
 }
 
 func writeAuthJSON(w http.ResponseWriter, status int, payload any) {

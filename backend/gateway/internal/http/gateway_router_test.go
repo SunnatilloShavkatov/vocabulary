@@ -8,8 +8,8 @@ import (
 	"testing"
 
 	"vocabulary/backend/libs/shared/config"
-	authservice "vocabulary/backend/modules/auth/service"
-	vocabularyservice "vocabulary/backend/modules/vocabulary/service"
+	"vocabulary/backend/modules/auth/service"
+	"vocabulary/backend/modules/vocabulary/service"
 )
 
 // mockVocabularyRepo satisfies vocabulary.VocabularyRepository without a real DB.

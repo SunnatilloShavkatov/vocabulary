@@ -5,10 +5,10 @@ import (
 	"net/http"
 
 	"vocabulary/backend/gateway/internal/middleware"
-	authcontroller "vocabulary/backend/modules/auth/controller"
-	authservice "vocabulary/backend/modules/auth/service"
-	vocabularycontroller "vocabulary/backend/modules/vocabulary/controller"
-	vocabularyservice "vocabulary/backend/modules/vocabulary/service"
+	"vocabulary/backend/modules/auth/controller"
+	"vocabulary/backend/modules/auth/service"
+	"vocabulary/backend/modules/vocabulary/controller"
+	"vocabulary/backend/modules/vocabulary/service"
 )
 
 type GatewayRouter struct {
@@ -27,7 +27,7 @@ func (r *GatewayRouter) Handler() http.Handler {
 }
 
 func (r *GatewayRouter) registerGatewayRoutes(jwtSecret string, authSvc *authservice.AuthService, vocabularySvc *vocabularyservice.VocabularyService) {
-	protected := middleware.RequireGatewayAdmin(jwtSecret)
+	protected := gatewaymiddleware.RequireGatewayAdmin(jwtSecret)
 
 	r.mux.HandleFunc("GET /healthz", GatewayHealthHandler)
 	r.mux.HandleFunc("GET /v1", gatewayVersionHandler)

@@ -2,10 +2,12 @@ package authcontroller
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
 	"testing"
+	"time"
 
 	jwt "github.com/golang-jwt/jwt/v5"
 	"vocabulary/backend/libs/shared/config"
@@ -13,6 +15,27 @@ import (
 )
 
 func noopProtected(next http.HandlerFunc) http.HandlerFunc { return next }
+
+type mockAuthRepository struct {
+	admins map[string]authservice.AuthAdmin
+}
+
+func (m *mockAuthRepository) CreateAdmin(_ context.Context, email, _ string, role string) (*authservice.AuthAdmin, error) {
+	if m.admins == nil {
+		m.admins = map[string]authservice.AuthAdmin{}
+	}
+	if _, ok := m.admins[email]; ok {
+		return nil, authservice.ErrAuthAdminAlreadyExists
+	}
+	admin := authservice.AuthAdmin{
+		ID:        "admin-id-1",
+		Email:     email,
+		Role:      role,
+		CreatedAt: time.Now().UTC(),
+	}
+	m.admins[email] = admin
+	return &admin, nil
+}
 
 func TestLoginSuccess(t *testing.T) {
 	mux := http.NewServeMux()
@@ -58,14 +81,47 @@ func TestLoginValidationErrors(t *testing.T) {
 	}
 }
 
-func TestCreateAdminNotImplemented(t *testing.T) {
+func TestCreateAdminSuccess(t *testing.T) {
 	mux := http.NewServeMux()
-	RegisterAuthRoutes(mux, authservice.NewAuthService(config.Config{}), noopProtected)
-	req := httptest.NewRequest(http.MethodPost, "/v1/admins", nil)
+	repo := &mockAuthRepository{}
+	RegisterAuthRoutes(mux, authservice.NewAuthService(config.Config{}, repo), noopProtected)
+	req := httptest.NewRequest(http.MethodPost, "/v1/admins", bytes.NewBufferString(`{"email":"new-admin@example.com","password":"password123"}`))
 	res := httptest.NewRecorder()
 	mux.ServeHTTP(res, req)
-	if res.Code != http.StatusNotImplemented {
-		t.Fatalf("expected status %d, got %d", http.StatusNotImplemented, res.Code)
+	if res.Code != http.StatusCreated {
+		t.Fatalf("expected status %d, got %d: %s", http.StatusCreated, res.Code, res.Body.String())
+	}
+}
+
+func TestCreateAdminValidationError(t *testing.T) {
+	mux := http.NewServeMux()
+	RegisterAuthRoutes(mux, authservice.NewAuthService(config.Config{}, &mockAuthRepository{}), noopProtected)
+	req := httptest.NewRequest(http.MethodPost, "/v1/admins", bytes.NewBufferString(`{"email":"new-admin@example.com","password":"short"}`))
+	res := httptest.NewRecorder()
+	mux.ServeHTTP(res, req)
+	if res.Code != http.StatusBadRequest {
+		t.Fatalf("expected status %d, got %d", http.StatusBadRequest, res.Code)
+	}
+}
+
+func TestCreateAdminDuplicate(t *testing.T) {
+	mux := http.NewServeMux()
+	repo := &mockAuthRepository{}
+	RegisterAuthRoutes(mux, authservice.NewAuthService(config.Config{}, repo), noopProtected)
+	body := `{"email":"dup-admin@example.com","password":"password123"}`
+
+	firstReq := httptest.NewRequest(http.MethodPost, "/v1/admins", bytes.NewBufferString(body))
+	firstRes := httptest.NewRecorder()
+	mux.ServeHTTP(firstRes, firstReq)
+	if firstRes.Code != http.StatusCreated {
+		t.Fatalf("expected status %d, got %d", http.StatusCreated, firstRes.Code)
+	}
+
+	secondReq := httptest.NewRequest(http.MethodPost, "/v1/admins", bytes.NewBufferString(body))
+	secondRes := httptest.NewRecorder()
+	mux.ServeHTTP(secondRes, secondReq)
+	if secondRes.Code != http.StatusConflict {
+		t.Fatalf("expected status %d, got %d", http.StatusConflict, secondRes.Code)
 	}
 }
 
