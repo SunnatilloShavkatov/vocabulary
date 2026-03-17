@@ -1,0 +1,9 @@
+.git
+.idea
+.env
+.env.*
+!.env.example
+!.env.docker.example
+bin
+tmp
+

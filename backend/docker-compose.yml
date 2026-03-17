@@ -1,0 +1,72 @@
+services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: vocabulary-postgres
+    environment:
+      POSTGRES_DB: ${DB_NAME:-vocabulary}
+      POSTGRES_USER: ${DB_USER:-vocabulary}
+      POSTGRES_PASSWORD: ${DB_PASSWORD:-vocabulary}
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${DB_USER:-vocabulary} -d ${DB_NAME:-vocabulary}"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  migrate:
+    image: postgres:16-alpine
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      PGPASSWORD: ${DB_PASSWORD:-vocabulary}
+    volumes:
+      - ./migrations:/migrations:ro
+    command: >
+      sh -c "psql -h postgres -U ${DB_USER:-vocabulary} -d ${DB_NAME:-vocabulary} -v ON_ERROR_STOP=1 -f /migrations/000001_init.up.sql &&
+             psql -h postgres -U ${DB_USER:-vocabulary} -d ${DB_NAME:-vocabulary} -v ON_ERROR_STOP=1 -f /migrations/000002_alter_vocabularies_nullable_created_by.up.sql"
+    restart: "no"
+
+  gateway:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: vocabulary-gateway
+    depends_on:
+      postgres:
+        condition: service_healthy
+      migrate:
+        condition: service_completed_successfully
+    environment:
+      PORT: ${PORT:-8080}
+      DB_HOST: ${DB_HOST:-postgres}
+      DB_PORT: ${DB_PORT:-5432}
+      DB_NAME: ${DB_NAME:-vocabulary}
+      DB_USER: ${DB_USER:-vocabulary}
+      DB_PASSWORD: ${DB_PASSWORD:-vocabulary}
+      DB_SSLMODE: ${DB_SSLMODE:-disable}
+      JWT_SECRET: ${JWT_SECRET:-change-me}
+      JWT_ACCESS_TTL_MINUTES: ${JWT_ACCESS_TTL_MINUTES:-15}
+      BOOTSTRAP_ADMIN_EMAIL: ${BOOTSTRAP_ADMIN_EMAIL:-admin@osonvocabulary.local}
+      BOOTSTRAP_ADMIN_PASSWORD: ${BOOTSTRAP_ADMIN_PASSWORD:-admin12345}
+    ports:
+      - "8080:8080"
+
+  gateway-test:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    command:
+      [
+        "sh",
+        "-c",
+        "cd /app/gateway && go test ./... && cd /app/libs/shared && go test ./... && cd /app/modules/auth && go test ./... && cd /app/modules/vocabulary && go test ./...",
+      ]
+    profiles: ["test"]
+
+volumes:
+  postgres_data:
+

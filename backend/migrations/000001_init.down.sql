@@ -1,0 +1,3 @@
+DROP TABLE IF EXISTS vocabularies;
+DROP TABLE IF EXISTS admins;
+

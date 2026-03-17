@@ -1,0 +1,9 @@
+go 1.23
+
+use (
+	./gateway
+	./modules/auth
+	./modules/vocabulary
+	./libs/shared
+)
+
