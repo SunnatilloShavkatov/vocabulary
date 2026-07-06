@@ -37,7 +37,9 @@ class _VocabularyPageState extends State<VocabularyPage> {
     });
 
     try {
-      final result = await widget.api.fetchVocabulary(search: _searchController.text.trim());
+      final result = await widget.api.fetchVocabulary(
+        search: _searchController.text.trim(),
+      );
       if (!mounted) {
         return;
       }
@@ -80,7 +82,10 @@ class _VocabularyPageState extends State<VocabularyPage> {
                   ),
                 ),
                 const SizedBox(width: 8),
-                ElevatedButton(onPressed: _isLoading ? null : _load, child: const Text('Search')),
+                ElevatedButton(
+                  onPressed: _isLoading ? null : _load,
+                  child: const Text('Search'),
+                ),
               ],
             ),
             const SizedBox(height: 12),
@@ -98,7 +103,9 @@ class _VocabularyPageState extends State<VocabularyPage> {
       return const Center(child: CircularProgressIndicator());
     }
     if (_error != null) {
-      return Center(child: Text(_error!, style: const TextStyle(color: Colors.red)));
+      return Center(
+        child: Text(_error!, style: const TextStyle(color: Colors.red)),
+      );
     }
     if (_items.isEmpty) {
       return const Center(child: Text('No vocabulary found.'));
@@ -112,10 +119,14 @@ class _VocabularyPageState extends State<VocabularyPage> {
         return ListTile(
           title: Text(item.word),
           subtitle: Text(item.translation),
-          trailing: item.example.isEmpty ? null : Tooltip(message: item.example, child: const Icon(Icons.info_outline)),
+          trailing: item.example.isEmpty
+              ? null
+              : Tooltip(
+                  message: item.example,
+                  child: const Icon(Icons.info_outline),
+                ),
         );
       },
     );
   }
 }
-

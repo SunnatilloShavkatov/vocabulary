@@ -3,8 +3,11 @@ import 'package:dio/dio.dart';
 import '../auth/auth_repository.dart';
 
 class ApiClient {
-  ApiClient({required this.baseUrl, required this.authRepository}) : _dio = Dio(BaseOptions(baseUrl: baseUrl)) {
-    _dio.interceptors.add(LogInterceptor(responseBody: true, requestBody: true));
+  ApiClient({required this.baseUrl, required this.authRepository})
+    : _dio = Dio(BaseOptions(baseUrl: baseUrl)) {
+    _dio.interceptors.add(
+      LogInterceptor(responseBody: true, requestBody: true),
+    );
     _dio.interceptors.add(
       InterceptorsWrapper(
         onRequest: (options, handler) {
@@ -21,7 +24,8 @@ class ApiClient {
             final refreshed = await authRepository.tryRefresh();
             if (refreshed != null && refreshed.accessToken.trim().isNotEmpty) {
               final request = err.requestOptions;
-              request.headers['Authorization'] = 'Bearer ${refreshed.accessToken}';
+              request.headers['Authorization'] =
+                  'Bearer ${refreshed.accessToken}';
               request.extra['retried'] = true;
               try {
                 final response = await _dio.fetch(request);

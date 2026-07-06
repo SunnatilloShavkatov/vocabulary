@@ -8,7 +8,9 @@ import '../core/session_tokens.dart';
 class AuthRepository {
   AuthRepository({required this.storage, required this.baseUrl})
     : _dio = Dio(BaseOptions(baseUrl: baseUrl))
-        ..interceptors.add(LogInterceptor(responseBody: true, requestBody: true));
+        ..interceptors.add(
+          LogInterceptor(responseBody: true, requestBody: true),
+        );
 
   final FlutterSecureStorage storage;
   final String baseUrl;
@@ -32,11 +34,18 @@ class AuthRepository {
       return null;
     }
 
-    _cachedTokens = SessionTokens(accessToken: accessToken, refreshToken: refreshToken, name: name);
+    _cachedTokens = SessionTokens(
+      accessToken: accessToken,
+      refreshToken: refreshToken,
+      name: name,
+    );
     return _cachedTokens;
   }
 
-  Future<SessionTokens> login({required String email, required String password}) async {
+  Future<SessionTokens> login({
+    required String email,
+    required String password,
+  }) async {
     final response = await _dio.post<Map<String, dynamic>>(
       '/v1/auth/login',
       data: {'email': email.trim(), 'password': password},
@@ -52,7 +61,11 @@ class AuthRepository {
       throw Exception('Login response does not contain access_token');
     }
 
-    final tokens = SessionTokens(accessToken: accessToken, refreshToken: refreshToken, name: name);
+    final tokens = SessionTokens(
+      accessToken: accessToken,
+      refreshToken: refreshToken,
+      name: name,
+    );
     await saveSession(tokens);
     return tokens;
   }
@@ -65,7 +78,10 @@ class AuthRepository {
           '/v1/auth/logout',
           data: {'refresh_token': tokens.refreshToken},
           options: Options(
-            headers: {'Content-Type': 'application/json', 'Authorization': 'Bearer ${tokens.accessToken}'},
+            headers: {
+              'Content-Type': 'application/json',
+              'Authorization': 'Bearer ${tokens.accessToken}',
+            },
           ),
         );
       } catch (_) {
@@ -89,12 +105,17 @@ class AuthRepository {
       );
       final body = response.data ?? const <String, dynamic>{};
       final newAccessToken = (body['access_token'] as String? ?? '').trim();
-      final newRefreshToken = (body['refresh_token'] as String? ?? tokens.refreshToken).trim();
+      final newRefreshToken =
+          (body['refresh_token'] as String? ?? tokens.refreshToken).trim();
       final newName = (body['name'] as String? ?? tokens.name).trim();
       if (newAccessToken.isEmpty) {
         return null;
       }
-      final updated = SessionTokens(accessToken: newAccessToken, refreshToken: newRefreshToken, name: newName);
+      final updated = SessionTokens(
+        accessToken: newAccessToken,
+        refreshToken: newRefreshToken,
+        name: newName,
+      );
       await saveSession(updated);
       return updated;
     } on DioException catch (e) {
