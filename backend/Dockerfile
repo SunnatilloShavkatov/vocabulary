@@ -14,6 +14,7 @@ COPY modules/auth/go.mod ./modules/auth/go.mod
 COPY modules/users/go.mod ./modules/users/go.mod
 COPY modules/vocabulary/go.mod ./modules/vocabulary/go.mod
 COPY modules/notification/go.mod ./modules/notification/go.mod
+COPY proto/go.mod ./proto/go.mod
 COPY libs/shared/go.mod ./libs/shared/go.mod
 
 # Download and resolve all dependencies

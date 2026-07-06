@@ -101,7 +101,7 @@ func authGRPCCreateAdminHandler(srv any, ctx context.Context, dec func(any) erro
 	return h.CreateAdmin(ctx, req)
 }
 
-func authGRPCHealthHandler(_ any, _ context.Context, dec func(any) error, _ grpc.UnaryServerInterceptor) (any, error) {
+func authGRPCHealthHandler(srv any, ctx context.Context, dec func(any) error, _ grpc.UnaryServerInterceptor) (any, error) {
 	req := &authv1.HealthRequest{}
 	if err := dec(req); err != nil {
 		return nil, status.Error(codes.InvalidArgument, "invalid request")
