@@ -22,6 +22,18 @@ type DatabaseConfig struct {
 type JWTConfig struct {
 	Secret           string
 	AccessTTLMinutes int
+	PublicKeyPath    string
+}
+
+type RabbitMQConfig struct {
+	URL              string
+	WordAddedExchange string
+	WordAddedQueue    string
+	WordAddedRoutingKey string
+}
+
+type FCMConfig struct {
+	CredentialsFile string
 }
 
 type BootstrapAdminConfig struct {
@@ -34,6 +46,9 @@ type Config struct {
 	Database       DatabaseConfig
 	JWT            JWTConfig
 	BootstrapAdmin BootstrapAdminConfig
+	RabbitMQ       RabbitMQConfig
+	FCM            FCMConfig
+	CORSAllowedOrigins string
 }
 
 func Load() (Config, error) {
@@ -65,10 +80,20 @@ func Load() (Config, error) {
 		JWT: JWTConfig{
 			Secret:           envString("JWT_SECRET", "change-me"),
 			AccessTTLMinutes: jwtTTL,
+			PublicKeyPath:    envString("JWT_PUBLIC_KEY_PATH", ""),
 		},
 		BootstrapAdmin: BootstrapAdminConfig{
 			Email:    envString("BOOTSTRAP_ADMIN_EMAIL", ""),
 			Password: envString("BOOTSTRAP_ADMIN_PASSWORD", ""),
+		},
+		RabbitMQ: RabbitMQConfig{
+			URL:                 envString("RABBITMQ_URL", "amqp://guest:guest@localhost:5672/"),
+			WordAddedExchange:   envString("RABBITMQ_WORD_ADDED_EXCHANGE", "dictionary.events"),
+			WordAddedQueue:      envString("RABBITMQ_WORD_ADDED_QUEUE", "notification.word-added"),
+			WordAddedRoutingKey: envString("RABBITMQ_WORD_ADDED_ROUTING_KEY", "word.added"),
+		},
+		FCM: FCMConfig{
+			CredentialsFile: envString("FCM_CREDENTIALS_FILE", ""),
 		},
 		CORSAllowedOrigins: envString("CORS_ALLOWED_ORIGINS", "*"),
 	}

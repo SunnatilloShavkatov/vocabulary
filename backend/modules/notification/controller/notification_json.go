@@ -1,0 +1,12 @@
+package notificationcontroller
+
+import (
+	"encoding/json"
+	"net/http"
+)
+
+func writeNotificationJSON(w http.ResponseWriter, status int, payload any) {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(status)
+	_ = json.NewEncoder(w).Encode(payload)
+}

@@ -1,13 +1,15 @@
+import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 
-import 'package:oson_vocabulary_mobile/main.dart';
+import 'package:oson_vocabulary_mobile/src/auth/login_page.dart';
 
 void main() {
-  testWidgets('Shows welcome page by default', (WidgetTester tester) async {
-    await tester.pumpWidget(const OsonVocabularyMobileApp());
+  testWidgets('Shows login page', (WidgetTester tester) async {
+    await tester.pumpWidget(
+      MaterialApp(home: LoginPage(onLogin: (_, __) async {})),
+    );
 
-    expect(find.text('Oson Vocabulary'), findsOneWidget);
-    expect(find.text('Welcome to Oson Vocabulary'), findsOneWidget);
-    expect(find.text('Open Vocabulary'), findsOneWidget);
+    expect(find.text('Oson Vocabulary Login'), findsOneWidget);
+    expect(find.text('Login'), findsOneWidget);
   });
 }

@@ -14,6 +14,7 @@ import (
 )
 
 func noopProtected(next http.HandlerFunc) http.HandlerFunc { return next }
+func noopAdminProtected(next http.HandlerFunc) http.HandlerFunc { return next }
 
 type mockRepository struct {
 	items []vocabularyservice.VocabularyItem
@@ -29,9 +30,76 @@ func (m *mockRepository) List(_ context.Context, _ string, _, _ int) ([]vocabula
 	return m.items, len(m.items), nil
 }
 
+func (m *mockRepository) AdminList(_ context.Context, _ vocabularyservice.AdminVocabularySearch) ([]vocabularyservice.VocabularyItem, int, error) {
+	return m.items, len(m.items), nil
+}
+
+func (m *mockRepository) AdminCreate(_ context.Context, input vocabularyservice.AdminVocabularyUpsertInput) (*vocabularyservice.VocabularyItem, error) {
+	item := vocabularyservice.VocabularyItem{
+		ID:          "admin-test-id",
+		Word:        input.Word,
+		Translation: input.Translation,
+		Example:     input.Example,
+		Category:    input.Category,
+		Status:      input.Status,
+		CreatedAt:   time.Now(),
+		UpdatedAt:   time.Now(),
+	}
+	m.items = append(m.items, item)
+	return &item, nil
+}
+
+func (m *mockRepository) AdminGet(_ context.Context, id string) (*vocabularyservice.VocabularyItem, error) {
+	for _, item := range m.items {
+		if item.ID == id {
+			found := item
+			return &found, nil
+		}
+	}
+	return nil, vocabularyservice.ErrVocabularyNotFound
+}
+
+func (m *mockRepository) AdminUpdate(_ context.Context, id string, input vocabularyservice.AdminVocabularyUpsertInput) (*vocabularyservice.VocabularyItem, error) {
+	for i := range m.items {
+		if m.items[i].ID == id {
+			m.items[i].Word = input.Word
+			m.items[i].Translation = input.Translation
+			m.items[i].Example = input.Example
+			m.items[i].Category = input.Category
+			m.items[i].Status = input.Status
+			m.items[i].UpdatedAt = time.Now()
+			updated := m.items[i]
+			return &updated, nil
+		}
+	}
+	return nil, vocabularyservice.ErrVocabularyNotFound
+}
+
+func (m *mockRepository) AdminDelete(_ context.Context, id string) error {
+	for i := range m.items {
+		if m.items[i].ID == id {
+			m.items = append(m.items[:i], m.items[i+1:]...)
+			return nil
+		}
+	}
+	return vocabularyservice.ErrVocabularyNotFound
+}
+
+func (m *mockRepository) AdminSetStatus(_ context.Context, id string, status string) (*vocabularyservice.VocabularyItem, error) {
+	for i := range m.items {
+		if m.items[i].ID == id {
+			m.items[i].Status = status
+			m.items[i].UpdatedAt = time.Now()
+			updated := m.items[i]
+			return &updated, nil
+		}
+	}
+	return nil, vocabularyservice.ErrVocabularyNotFound
+}
+
 func TestCreateVocabularySuccess(t *testing.T) {
 	mux := http.NewServeMux()
-	RegisterVocabularyRoutes(mux, vocabularyservice.NewVocabularyService(config.Config{}, &mockRepository{}), noopProtected, nil)
+	RegisterVocabularyRoutes(mux, vocabularyservice.NewVocabularyService(config.Config{}, &mockRepository{}), noopProtected, noopAdminProtected, nil)
 	req := httptest.NewRequest(http.MethodPost, "/v1/vocabulary", bytes.NewBufferString(`{"word":"apple","translation":"olma"}`))
 	res := httptest.NewRecorder()
 	mux.ServeHTTP(res, req)
@@ -42,7 +110,7 @@ func TestCreateVocabularySuccess(t *testing.T) {
 
 func TestCreateVocabularyValidation(t *testing.T) {
 	mux := http.NewServeMux()
-	RegisterVocabularyRoutes(mux, vocabularyservice.NewVocabularyService(config.Config{}, &mockRepository{}), noopProtected, nil)
+	RegisterVocabularyRoutes(mux, vocabularyservice.NewVocabularyService(config.Config{}, &mockRepository{}), noopProtected, noopAdminProtected, nil)
 	req := httptest.NewRequest(http.MethodPost, "/v1/vocabulary", bytes.NewBufferString(`{"word":""}`))
 	res := httptest.NewRecorder()
 	mux.ServeHTTP(res, req)
@@ -54,7 +122,7 @@ func TestCreateVocabularyValidation(t *testing.T) {
 func TestListVocabulary(t *testing.T) {
 	repo := &mockRepository{items: []vocabularyservice.VocabularyItem{{ID: "1", Word: "apple", Translation: "olma"}}}
 	mux := http.NewServeMux()
-	RegisterVocabularyRoutes(mux, vocabularyservice.NewVocabularyService(config.Config{}, repo), noopProtected, nil)
+	RegisterVocabularyRoutes(mux, vocabularyservice.NewVocabularyService(config.Config{}, repo), noopProtected, noopAdminProtected, nil)
 	req := httptest.NewRequest(http.MethodGet, "/v1/vocabulary?page=2&limit=10", nil)
 	res := httptest.NewRecorder()
 	mux.ServeHTTP(res, req)

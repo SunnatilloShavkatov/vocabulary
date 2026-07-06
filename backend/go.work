@@ -3,6 +3,9 @@ go 1.23
 use (
 	./gateway
 	./modules/auth
+	./modules/notification
+	./proto
+	./modules/users
 	./modules/vocabulary
 	./libs/shared
 )

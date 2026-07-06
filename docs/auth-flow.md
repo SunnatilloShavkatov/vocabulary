@@ -25,12 +25,19 @@ Bu faqat MVP/local foundation uchun. Keyingi bosqichda login DB dagi `admins` ja
 
 - `POST /v1/vocabulary`
 - `POST /v1/admins`
+- `GET /v1/users/me`
+- `POST /internal/notifications/word-added`
 
 Gateway middleware:
 
 - JWT signature va expiry ni tekshiradi
-- `role=admin` ekanini tekshiradi
-- Shundan keyin requestni service'ga uzatadi
+- `X-User-ID` va `X-User-Role` headerlarini qo'shib requestni service'ga uzatadi
+
+Microservice layer:
+
+- Forward qilingan identity headerlarni qabul qiladi
+- RBAC qoidalarini endpoint darajasida tekshiradi
+- Admin-only operatsiyalar (`POST /v1/admins`) qat'iy nazoratda qoladi
 
 ## Xatolik holatlari
 

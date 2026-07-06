@@ -1,8 +1,8 @@
 openapi: 3.0.3
 info:
   title: Vocabulary API
-  version: 0.2.0
-  description: MVP API contract for Vocabulary monorepo (frozen Phase 4)
+  version: 0.3.0
+  description: BRD-aligned API contract for Dictionary Platform
 servers:
   - url: http://localhost:8080
     description: Local development
@@ -22,6 +22,18 @@ paths:
                   status:
                     type: string
                     example: ok
+
+  /metrics:
+    get:
+      summary: Prometheus metrics endpoint
+      tags: [System]
+      responses:
+        '200':
+          description: Prometheus text metrics
+          content:
+            text/plain:
+              schema:
+                type: string
 
   /v1/auth/login:
     post:
@@ -77,10 +89,50 @@ paths:
         '503':
           $ref: '#/components/responses/ServiceUnavailable'
 
-  /v1/vocabulary:
+  /v1/users/me:
+    get:
+      summary: Get current user profile (protected)
+      tags: [Users]
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Current user profile
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/UserProfile'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '500':
+          $ref: '#/components/responses/InternalError'
+
+  /v1/admin/users:
+    get:
+      summary: List users for admin panel
+      tags: [AdminUsers]
+      security:
+        - bearerAuth: []
+      parameters:
+        - in: query
+          name: q
+          schema:
+            type: string
+          description: Search by name or email
+      responses:
+        '200':
+          description: User list
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AdminUserListResponse'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
     post:
-      summary: Add vocabulary (protected)
-      tags: [Vocabulary]
+      summary: Create client user
+      tags: [AdminUsers]
       security:
         - bearerAuth: []
       requestBody:
@@ -88,21 +140,382 @@ paths:
         content:
           application/json:
             schema:
-              $ref: '#/components/schemas/CreateVocabularyRequest'
+              $ref: '#/components/schemas/AdminCreateUserRequest'
       responses:
         '201':
-          description: Vocabulary created
+          description: User created
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/VocabularyItem'
+                $ref: '#/components/schemas/AdminUser'
         '400':
           $ref: '#/components/responses/BadRequest'
         '401':
           $ref: '#/components/responses/Unauthorized'
-        '500':
-          $ref: '#/components/responses/InternalError'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '409':
+          $ref: '#/components/responses/Conflict'
 
+  /v1/admin/users/{id}:
+    get:
+      summary: Get user by id
+      tags: [AdminUsers]
+      security:
+        - bearerAuth: []
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: User details
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AdminUser'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+    patch:
+      summary: Update user profile fields
+      tags: [AdminUsers]
+      security:
+        - bearerAuth: []
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AdminUpdateUserRequest'
+      responses:
+        '200':
+          description: User updated
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AdminUser'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+    delete:
+      summary: Delete user
+      tags: [AdminUsers]
+      security:
+        - bearerAuth: []
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: string
+      responses:
+        '204':
+          description: User deleted
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+  /v1/admin/users/{id}/block:
+    post:
+      summary: Block user
+      tags: [AdminUsers]
+      security:
+        - bearerAuth: []
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: User blocked
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AdminUser'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+  /v1/admin/users/{id}/unblock:
+    post:
+      summary: Unblock user
+      tags: [AdminUsers]
+      security:
+        - bearerAuth: []
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: User unblocked
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AdminUser'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+  /v1/admin/stats:
+    get:
+      summary: Admin dashboard stats
+      tags: [Admin]
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Dashboard stats
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AdminStats'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+
+  /v1/admin/backup/export:
+    get:
+      summary: Export backup snapshot
+      tags: [Admin]
+      security:
+        - bearerAuth: []
+      parameters:
+        - in: query
+          name: format
+          schema:
+            type: string
+            enum: [json, sql]
+            default: json
+      responses:
+        '200':
+          description: Backup export file
+          content:
+            application/json:
+              schema:
+                type: string
+            application/sql:
+              schema:
+                type: string
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+
+  /v1/admin/backup/export-jobs:
+    post:
+      summary: Start async backup export job
+      tags: [Admin]
+      security:
+        - bearerAuth: []
+      parameters:
+        - in: query
+          name: format
+          schema:
+            type: string
+            enum: [json, sql]
+            default: json
+      responses:
+        '202':
+          description: Export job started
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/BackupExportJob'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+    get:
+      summary: List backup export jobs
+      tags: [Admin]
+      security:
+        - bearerAuth: []
+      parameters:
+        - in: query
+          name: page
+          schema:
+            type: integer
+            default: 1
+            minimum: 1
+        - in: query
+          name: limit
+          schema:
+            type: integer
+            default: 20
+            minimum: 1
+            maximum: 100
+      responses:
+        '200':
+          description: Export job list
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/BackupExportJobListResponse'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+
+  /v1/admin/backup/export-jobs/{id}:
+    get:
+      summary: Get export job status
+      tags: [Admin]
+      security:
+        - bearerAuth: []
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Export job status
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/BackupExportJob'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+  /v1/admin/backup/export-jobs/{id}/download:
+    get:
+      summary: Download export job artifact
+      tags: [Admin]
+      security:
+        - bearerAuth: []
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Export file
+          content:
+            application/json:
+              schema:
+                type: string
+            application/sql:
+              schema:
+                type: string
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+
+  /v1/admin/audit-logs:
+    post:
+      summary: Write audit log entry
+      tags: [Admin]
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateAuditLogRequest'
+      responses:
+        '201':
+          description: Audit log created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AuditLogItem'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+    get:
+      summary: List audit logs
+      tags: [Admin]
+      security:
+        - bearerAuth: []
+      parameters:
+        - in: query
+          name: actor_id
+          schema:
+            type: string
+        - in: query
+          name: action
+          schema:
+            type: string
+        - in: query
+          name: page
+          schema:
+            type: integer
+            default: 1
+            minimum: 1
+        - in: query
+          name: limit
+          schema:
+            type: integer
+            default: 20
+            minimum: 1
+            maximum: 100
+      responses:
+        '200':
+          description: Audit log list
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AuditLogListResponse'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+
+  /v1/vocabulary:
     get:
       summary: List / search vocabularies (public)
       tags: [Vocabulary]
@@ -132,6 +545,266 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/VocabularyListResponse'
+    post:
+      summary: Add vocabulary (protected)
+      tags: [Vocabulary]
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateVocabularyRequest'
+      responses:
+        '201':
+          description: Vocabulary created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/VocabularyItem'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '500':
+          $ref: '#/components/responses/InternalError'
+
+  /v1/admin/vocabulary:
+    get:
+      summary: Admin list/search vocabularies
+      tags: [AdminVocabulary]
+      security:
+        - bearerAuth: []
+      parameters:
+        - in: query
+          name: word
+          schema:
+            type: string
+        - in: query
+          name: translation
+          schema:
+            type: string
+        - in: query
+          name: category
+          schema:
+            type: string
+        - in: query
+          name: status
+          schema:
+            type: string
+            enum: [pending, approved, rejected, blocked]
+        - in: query
+          name: page
+          schema:
+            type: integer
+            default: 1
+            minimum: 1
+        - in: query
+          name: limit
+          schema:
+            type: integer
+            default: 20
+            minimum: 1
+            maximum: 100
+      responses:
+        '200':
+          description: Admin vocabulary list
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/VocabularyListResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+    post:
+      summary: Admin create vocabulary
+      tags: [AdminVocabulary]
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateVocabularyRequest'
+      responses:
+        '201':
+          description: Vocabulary created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/VocabularyItem'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+
+  /v1/admin/vocabulary/{id}:
+    get:
+      summary: Admin get vocabulary by id
+      tags: [AdminVocabulary]
+      security:
+        - bearerAuth: []
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Vocabulary details
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/VocabularyItem'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+    patch:
+      summary: Admin update vocabulary
+      tags: [AdminVocabulary]
+      security:
+        - bearerAuth: []
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateVocabularyRequest'
+      responses:
+        '200':
+          description: Vocabulary updated
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/VocabularyItem'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+    delete:
+      summary: Admin delete vocabulary
+      tags: [AdminVocabulary]
+      security:
+        - bearerAuth: []
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: string
+      responses:
+        '204':
+          description: Vocabulary deleted
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+  /v1/admin/vocabulary/{id}/approve:
+    post:
+      summary: Admin approve vocabulary
+      tags: [AdminVocabulary]
+      security:
+        - bearerAuth: []
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Vocabulary approved
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/VocabularyItem'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+  /v1/admin/vocabulary/{id}/reject:
+    post:
+      summary: Admin reject vocabulary
+      tags: [AdminVocabulary]
+      security:
+        - bearerAuth: []
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Vocabulary rejected
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/VocabularyItem'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+  /internal/notifications/word-added:
+    post:
+      summary: Internal endpoint for WordAdded event processing
+      tags: [Notification]
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/WordAddedEvent'
+      responses:
+        '202':
+          description: Event accepted and SRS schedules generated
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  schedules:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/ScheduleItem'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '500':
+          $ref: '#/components/responses/InternalError'
 
 components:
   securitySchemes:
@@ -204,6 +877,11 @@ components:
           type: string
         example:
           type: string
+        category:
+          type: string
+        status:
+          type: string
+          enum: [pending, approved, rejected, blocked]
 
     VocabularyItem:
       type: object
@@ -217,6 +895,14 @@ components:
           type: string
         example:
           type: string
+        category:
+          type: string
+        status:
+          type: string
+          enum: [pending, approved, rejected, blocked]
+        updated_at:
+          type: string
+          format: date-time
         created_at:
           type: string
           format: date-time
@@ -237,6 +923,202 @@ components:
               type: integer
             total:
               type: integer
+
+    UserProfile:
+      type: object
+      properties:
+        id:
+          type: string
+        role:
+          type: string
+        settings:
+          type: object
+          additionalProperties:
+            type: string
+
+    AdminCreateUserRequest:
+      type: object
+      required: [name, email]
+      properties:
+        name:
+          type: string
+        email:
+          type: string
+          format: email
+
+    AdminUpdateUserRequest:
+      type: object
+      required: [name, email]
+      properties:
+        name:
+          type: string
+        email:
+          type: string
+          format: email
+
+    AdminUser:
+      type: object
+      properties:
+        id:
+          type: string
+        name:
+          type: string
+        email:
+          type: string
+          format: email
+        role:
+          type: string
+        status:
+          type: string
+          enum: [active, blocked]
+        created_at:
+          type: string
+          format: date-time
+        updated_at:
+          type: string
+          format: date-time
+
+    AdminUserListResponse:
+      type: object
+      properties:
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/AdminUser'
+
+    AdminStats:
+      type: object
+      properties:
+        users_count:
+          type: integer
+        words_count:
+          type: integer
+
+    BackupExportJob:
+      type: object
+      properties:
+        id:
+          type: string
+        format:
+          type: string
+          enum: [json, sql]
+        status:
+          type: string
+          enum: [running, completed, failed]
+        filename:
+          type: string
+        content_type:
+          type: string
+        download_url:
+          type: string
+        error:
+          type: string
+        created_at:
+          type: string
+          format: date-time
+        updated_at:
+          type: string
+          format: date-time
+
+    BackupExportJobListResponse:
+      type: object
+      properties:
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/BackupExportJob'
+        meta:
+          type: object
+          properties:
+            page:
+              type: integer
+            limit:
+              type: integer
+            total:
+              type: integer
+
+    CreateAuditLogRequest:
+      type: object
+      required: [action, target_type]
+      properties:
+        action:
+          type: string
+        target_type:
+          type: string
+        target_id:
+          type: string
+        metadata:
+          type: object
+          additionalProperties:
+            type: string
+
+    AuditLogItem:
+      type: object
+      properties:
+        id:
+          type: string
+        actor_id:
+          type: string
+        action:
+          type: string
+        target_type:
+          type: string
+        target_id:
+          type: string
+        metadata:
+          type: object
+          additionalProperties:
+            type: string
+        created_at:
+          type: string
+          format: date-time
+
+    AuditLogListResponse:
+      type: object
+      properties:
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/AuditLogItem'
+        meta:
+          type: object
+          properties:
+            page:
+              type: integer
+            limit:
+              type: integer
+            total:
+              type: integer
+
+    WordAddedEvent:
+      type: object
+      required: [word_id, user_id]
+      properties:
+        word_id:
+          type: string
+          format: uuid
+        user_id:
+          type: string
+          format: uuid
+        created_at:
+          type: string
+          format: date-time
+
+    ScheduleItem:
+      type: object
+      properties:
+        word_id:
+          type: string
+          format: uuid
+        user_id:
+          type: string
+          format: uuid
+        remind_at:
+          type: string
+          format: date-time
+        interval_days:
+          type: integer
+          enum: [1, 3, 7, 30]
 
     ErrorResponse:
       type: object
@@ -265,6 +1147,12 @@ components:
             $ref: '#/components/schemas/ErrorResponse'
     Conflict:
       description: Resource already exists
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+    NotFound:
+      description: Resource not found
       content:
         application/json:
           schema:

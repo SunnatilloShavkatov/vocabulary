@@ -2,11 +2,11 @@
 
 ## Maqsad
 
-`Vocabulary` loyihasi 3 qismdan iborat:
+`Dictionary Platform` loyihasi 3 qismdan iborat:
 
 1. Admin panel (Flutter Web)
 2. Oson Vocabulary client app (Flutter)
-3. Backend (Go)
+3. Backend (Go microservices)
 
 ## Monorepo struktura
 
@@ -18,8 +18,10 @@ Vocabulary/
     go.work              # backend workspace
     gateway/             # alohida Go module, API kirish nuqtasi
     modules/
-      auth/              # alohida Go module (controller + service)
-      vocabulary/        # alohida Go module (controller + service + repository)
+      auth/              # login + admin create
+      users/             # profile/settings contract
+      vocabulary/        # dictionary CRUD (MVP create/list/search)
+      notification/      # SRS schedule logic (1-3-7-30)
     libs/
       shared/            # alohida Go module, common contract/config
     migrations/          # DB migration fayllari
@@ -29,35 +31,70 @@ Vocabulary/
 
 ## Komponentlar vazifasi
 
-### 1) Gateway
+### 1) API Gateway
 
 - Tashqi API endpointlarni beradi (`/v1/...`)
+- Admin/client ilovalar uchun yagona REST entrypoint
 - Auth middleware orqali tokenni tekshiradi
-- Kerakli service'ga requestni yo'naltiradi
-- `auth` va `vocabulary` routerlarini bitta joyda compose qiladi
-- Alohida module bo'lgani uchun keyin mustaqil servicega ajratish oson
+- Valid tokendan `X-User-ID` va `X-User-Role` metadata beradi
+- Ichki service chaqiruvini gRPC orqali bajaradi
 
-### 2) Auth service
+### 2) Auth Service
 
 - Admin login (`email` + `password`)
 - JWT token berish (`access`, keyinroq `refresh`)
 - Yangi admin yaratish (role asosida)
-- O'z routeri orqali auth endpointlariga egalik qiladi
-- Dastlab monorepo ichida, keyin micro/macro servicega ko'chirishga tayyor
+- JWT issue/refresh va key management
+- Boshqa service/ gateway bilan gRPC contract orqali ishlaydi
+- O'z ma'lumotlar bazasiga ega (`auth-service-db`)
 
-### 3) Vocabulary service
+### 3) Users Service
+
+- Profil va settings state boshqaradi
+- O'z ma'lumotlar bazasiga ega (`users-service-db`)
+- gRPC orqali boshqa servicelarga user context beradi
+
+### 4) Dictionary Service
 
 - So'z qo'shish
 - So'zlar ro'yxatini qaytarish
 - Search (`word`, `translation` bo'yicha)
-- O'z routeri orqali vocabulary endpointlariga egalik qiladi
-- Alohida module bo'lgani uchun mustaqil release qilish imkoniyati bor
+- So'z CRUD va search funksiyasini bajaradi
+- O'z ma'lumotlar bazasiga ega (`dictionary-service-db`)
+- `WordAdded` eventini RabbitMQ orqali chiqaradi
 
-## Frontend oqimi
+### 5) Notification Service
 
-- Admin panel faqat login bilan kiradi
-- Oson Vocabulary client app public list va qidiruvni ko'rsatadi
-- Keyingi bosqichda client auth qo'shilishi mumkin
+- `WordAdded` eventini qabul qiladi
+- `1-3-7-30` kunlik SRS jadvalini hisoblaydi
+- Cron orqali due schedulelarni ishlab chiqadi
+- FCM orqali clientga push yuboradi
+- O'z ma'lumotlar bazasiga ega (`notification-service-db`)
+
+## Communication Model
+
+- Admin/client <-> backend: HTTP REST (faqat Gateway orqali).
+- Gateway <-> microservices: gRPC.
+- Microservice <-> microservice: gRPC.
+- Async: RabbitMQ events.
+
+## Event-driven oqim
+
+1. `Dictionary Service` so'zni saqlaydi (`dictionary-service-db`).
+2. `WordAdded` event RabbitMQ orqali `Notification Service` ga uzatiladi.
+3. `Notification Service` `notification-service-db` ga `schedules` yozadi (`1, 3, 7, 30`).
+4. Cron worker due schedulelarni olib FCM push yuboradi.
+
+## Observability
+
+- Gateway `GET /metrics` endpointi Prometheus formatida metrikalar beradi.
+- `docker-compose` ichida RabbitMQ + Prometheus + Grafana stack qo'shilgan.
+
+## DB-per-Service qoidasi
+
+- Har service faqat o'z DBsini o'qiydi/yozadi.
+- Boshqa service DBga direct query taqiqlanadi.
+- Cross-service data gRPC yoki event orqali olinadi.
 
 ## NFR (MVP)
 

@@ -15,8 +15,22 @@ type contextKey string
 // GatewayClaimsKey is the context key under which validated JWT claims are stored.
 const GatewayClaimsKey contextKey = "jwt_claims"
 
+const (
+	GatewayUserIDHeader   = "X-User-ID"
+	GatewayUserRoleHeader = "X-User-Role"
+)
+
+// RequireGatewayAuth returns a middleware that validates a Bearer JWT.
+func RequireGatewayAuth(secret string) func(http.HandlerFunc) http.HandlerFunc {
+	return requireGatewayRole(secret, "")
+}
+
 // RequireGatewayAdmin returns a middleware that validates a Bearer JWT and enforces role=admin.
 func RequireGatewayAdmin(secret string) func(http.HandlerFunc) http.HandlerFunc {
+	return requireGatewayRole(secret, "admin")
+}
+
+func requireGatewayRole(secret, requiredRole string) func(http.HandlerFunc) http.HandlerFunc {
 	return func(next http.HandlerFunc) http.HandlerFunc {
 		return func(w http.ResponseWriter, r *http.Request) {
 			authHeader := r.Header.Get("Authorization")
@@ -43,13 +57,23 @@ func RequireGatewayAdmin(secret string) func(http.HandlerFunc) http.HandlerFunc 
 				return
 			}
 
-			if claims["role"] != "admin" {
+			sub, subOK := claims["sub"].(string)
+			role, roleOK := claims["role"].(string)
+			if strings.TrimSpace(sub) == "" || strings.TrimSpace(role) == "" || !subOK || !roleOK {
+				writeGatewayJSON(w, http.StatusUnauthorized, map[string]string{"error": "invalid token claims"})
+				return
+			}
+
+			if requiredRole != "" && role != requiredRole {
 				writeGatewayJSON(w, http.StatusForbidden, map[string]string{"error": "admin role required"})
 				return
 			}
 
 			ctx := context.WithValue(r.Context(), GatewayClaimsKey, claims)
-			next(w, r.WithContext(ctx))
+			r = r.WithContext(ctx)
+			r.Header.Set(GatewayUserIDHeader, strings.TrimSpace(sub))
+			r.Header.Set(GatewayUserRoleHeader, strings.TrimSpace(role))
+			next(w, r)
 		}
 	}
 }
@@ -64,6 +88,18 @@ func GetGatewayAdminSubject(ctx context.Context) (string, bool) {
 		return "", false
 	}
 	return strings.TrimSpace(sub), true
+}
+
+func GetGatewayIdentityFromHeaders(r *http.Request) (string, string, bool) {
+	if r == nil {
+		return "", "", false
+	}
+	userID := strings.TrimSpace(r.Header.Get(GatewayUserIDHeader))
+	role := strings.TrimSpace(r.Header.Get(GatewayUserRoleHeader))
+	if userID == "" || role == "" {
+		return "", "", false
+	}
+	return userID, role, true
 }
 
 func writeGatewayJSON(w http.ResponseWriter, status int, payload any) {

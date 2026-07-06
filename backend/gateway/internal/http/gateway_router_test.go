@@ -8,12 +8,31 @@ import (
 	"testing"
 
 	"vocabulary/backend/libs/shared/config"
-	"vocabulary/backend/modules/auth/service"
+	notificationservice "vocabulary/backend/modules/notification/service"
+	usersservice "vocabulary/backend/modules/users/service"
 	"vocabulary/backend/modules/vocabulary/service"
+	authv1 "vocabulary/backend/proto/auth/v1"
 )
 
 // mockVocabularyRepo satisfies vocabulary.VocabularyRepository without a real DB.
 type mockVocabularyRepo struct{}
+
+type fakeAuthGRPCClient struct{}
+
+func (f *fakeAuthGRPCClient) Target() string { return "fake-auth:9091" }
+func (f *fakeAuthGRPCClient) CheckConnection(context.Context) error { return nil }
+func (f *fakeAuthGRPCClient) Health(context.Context) (authv1.HealthResponse, error) {
+	return authv1.HealthResponse{Status: "ok", Service: "auth-service"}, nil
+}
+func (f *fakeAuthGRPCClient) Login(_ context.Context, req authv1.LoginRequest) (authv1.LoginResponse, error) {
+	if req.Email == "admin@example.com" && req.Password == "password123" {
+		return authv1.LoginResponse{AccessToken: "token", TokenType: "Bearer", ExpiresIn: 900}, nil
+	}
+	return authv1.LoginResponse{}, nil
+}
+func (f *fakeAuthGRPCClient) CreateAdmin(_ context.Context, req authv1.CreateAdminRequest) (authv1.Admin, error) {
+	return authv1.Admin{ID: "admin-1", Email: req.Email, Role: "admin"}, nil
+}
 
 func (m *mockVocabularyRepo) Create(_ context.Context, word, translation, _ string, _ *string) (*vocabularyservice.VocabularyItem, error) {
 	return &vocabularyservice.VocabularyItem{ID: "test-id", Word: word, Translation: translation}, nil
@@ -78,6 +97,12 @@ func TestModuleRoutes(t *testing.T) {
 			path:   "/v1/vocabulary",
 			status: http.StatusOK,
 		},
+		{
+			name:   "my profile - no auth header",
+			method: http.MethodGet,
+			path:   "/v1/users/me",
+			status: http.StatusUnauthorized,
+		},
 	}
 
 	for _, tt := range tests {
@@ -103,8 +128,10 @@ func newTestRouter() *GatewayRouter {
 			Password: "password123",
 		},
 	}
-	authSvc := authservice.NewAuthService(cfg)
 	vocabularySvc := vocabularyservice.NewVocabularyService(cfg, &mockVocabularyRepo{})
-	return NewGatewayRouter("test-secret", "*", authSvc, vocabularySvc)
+	usersSvc := usersservice.NewUsersService(nil)
+	notificationSvc := notificationservice.NewNotificationService(nil)
+	authGRPCClient := &fakeAuthGRPCClient{}
+	return NewGatewayRouter("test-secret", "*", vocabularySvc, usersSvc, notificationSvc, authGRPCClient)
 }
 

@@ -11,9 +11,32 @@ services:
     volumes:
       - postgres_data:/var/lib/postgresql/data
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U ${DB_USER:-vocabulary} -d ${DB_NAME:-vocabulary}"]
+      test: [ "CMD-SHELL", "pg_isready -U ${DB_USER:-vocabulary} -d ${DB_NAME:-vocabulary}" ]
       interval: 5s
       timeout: 5s
+      retries: 10
+
+  rabbitmq:
+    image: rabbitmq:3-management-alpine
+    container_name: vocabulary-rabbitmq
+    ports:
+      - "5672:5672"
+      - "15672:15672"
+    healthcheck:
+      test: [ "CMD", "rabbitmq-diagnostics", "check_port_connectivity" ]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+
+  redis:
+    image: redis:7-alpine
+    container_name: vocabulary-redis
+    ports:
+      - "6379:6379"
+    healthcheck:
+      test: [ "CMD", "redis-cli", "ping" ]
+      interval: 5s
+      timeout: 3s
       retries: 10
 
   migrate:
@@ -27,7 +50,10 @@ services:
       - ./migrations:/migrations:ro
     command: >
       sh -c "psql -h postgres -U ${DB_USER:-vocabulary} -d ${DB_NAME:-vocabulary} -v ON_ERROR_STOP=1 -f /migrations/000001_init.up.sql &&
-             psql -h postgres -U ${DB_USER:-vocabulary} -d ${DB_NAME:-vocabulary} -v ON_ERROR_STOP=1 -f /migrations/000002_alter_vocabularies_nullable_created_by.up.sql"
+             psql -h postgres -U ${DB_USER:-vocabulary} -d ${DB_NAME:-vocabulary} -v ON_ERROR_STOP=1 -f /migrations/000002_alter_vocabularies_nullable_created_by.up.sql &&
+             psql -h postgres -U ${DB_USER:-vocabulary} -d ${DB_NAME:-vocabulary} -v ON_ERROR_STOP=1 -f /migrations/000003_create_users_and_schedules.up.sql &&
+             psql -h postgres -U ${DB_USER:-vocabulary} -d ${DB_NAME:-vocabulary} -v ON_ERROR_STOP=1 -f /migrations/000004_admin_fields_and_vocab_moderation.up.sql &&
+             psql -h postgres -U ${DB_USER:-vocabulary} -d ${DB_NAME:-vocabulary} -v ON_ERROR_STOP=1 -f /migrations/000005_create_audit_logs.up.sql"
     restart: "no"
 
   gateway:
@@ -40,6 +66,10 @@ services:
         condition: service_healthy
       migrate:
         condition: service_completed_successfully
+      rabbitmq:
+        condition: service_healthy
+      auth-service:
+        condition: service_started
     environment:
       PORT: ${PORT:-8080}
       DB_HOST: ${DB_HOST:-postgres}
@@ -52,22 +82,84 @@ services:
       JWT_ACCESS_TTL_MINUTES: ${JWT_ACCESS_TTL_MINUTES:-15}
       BOOTSTRAP_ADMIN_EMAIL: ${BOOTSTRAP_ADMIN_EMAIL:-admin@osonvocabulary.local}
       BOOTSTRAP_ADMIN_PASSWORD: ${BOOTSTRAP_ADMIN_PASSWORD:-admin12345}
+      CORS_ALLOWED_ORIGINS: ${CORS_ALLOWED_ORIGINS:-*}
+      JWT_PUBLIC_KEY_PATH: ${JWT_PUBLIC_KEY_PATH:-}
+      RABBITMQ_URL: ${RABBITMQ_URL:-amqp://guest:guest@rabbitmq:5672/}
+      RABBITMQ_WORD_ADDED_EXCHANGE: ${RABBITMQ_WORD_ADDED_EXCHANGE:-dictionary.events}
+      RABBITMQ_WORD_ADDED_QUEUE: ${RABBITMQ_WORD_ADDED_QUEUE:-notification.word-added}
+      RABBITMQ_WORD_ADDED_ROUTING_KEY: ${RABBITMQ_WORD_ADDED_ROUTING_KEY:-word.added}
+      FCM_CREDENTIALS_FILE: ${FCM_CREDENTIALS_FILE:-}
+      AUTH_GRPC_TARGET: ${AUTH_GRPC_TARGET:-auth-service:9091}
     ports:
       - "8080:8080"
+
+  auth-service:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      args:
+        TARGET_PATH: ./modules/auth/cmd/server
+        BINARY_NAME: auth-service
+    container_name: vocabulary-auth-service
+    depends_on:
+      postgres:
+        condition: service_healthy
+      migrate:
+        condition: service_completed_successfully
+    environment:
+      PORT: ${PORT:-8080}
+      AUTH_SERVICE_PORT: ${AUTH_SERVICE_PORT:-8081}
+      AUTH_GRPC_PORT: ${AUTH_GRPC_PORT:-9091}
+      DB_HOST: ${DB_HOST:-postgres}
+      DB_PORT: ${DB_PORT:-5432}
+      DB_NAME: ${DB_NAME:-vocabulary}
+      DB_USER: ${DB_USER:-vocabulary}
+      DB_PASSWORD: ${DB_PASSWORD:-vocabulary}
+      DB_SSLMODE: ${DB_SSLMODE:-disable}
+      JWT_SECRET: ${JWT_SECRET:-change-me}
+      JWT_ACCESS_TTL_MINUTES: ${JWT_ACCESS_TTL_MINUTES:-15}
+      BOOTSTRAP_ADMIN_EMAIL: ${BOOTSTRAP_ADMIN_EMAIL:-admin@osonvocabulary.local}
+      BOOTSTRAP_ADMIN_PASSWORD: ${BOOTSTRAP_ADMIN_PASSWORD:-admin12345}
+    ports:
+      - "8081:8081"
+      - "9091:9091"
+
+  prometheus:
+    image: prom/prometheus:v2.54.1
+    container_name: vocabulary-prometheus
+    depends_on:
+      gateway:
+        condition: service_started
+    volumes:
+      - ./monitoring/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+    command:
+      - "--config.file=/etc/prometheus/prometheus.yml"
+    ports:
+      - "9090:9090"
+
+  grafana:
+    image: grafana/grafana:11.2.0
+    container_name: vocabulary-grafana
+    depends_on:
+      prometheus:
+        condition: service_started
+    environment:
+      GF_SECURITY_ADMIN_USER: ${GRAFANA_ADMIN_USER:-admin}
+      GF_SECURITY_ADMIN_PASSWORD: ${GRAFANA_ADMIN_PASSWORD:-admin}
+    ports:
+      - "3000:3000"
+    volumes:
+      - grafana_data:/var/lib/grafana
 
   gateway-test:
     image: golang:1.23-alpine
     working_dir: /app
     volumes:
       - .:/app
-    command:
-      [
-        "sh",
-        "-c",
-        "go work sync && go test ./gateway/... ./libs/... ./modules/...",
-      ]
-    profiles: ["test"]
+    command: [ "sh", "-c", "go work sync && go test ./gateway/... ./libs/... ./modules/..." ]
+    profiles: [ "test" ]
 
 volumes:
   postgres_data:
+  grafana_data:
 

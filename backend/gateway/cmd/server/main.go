@@ -5,12 +5,16 @@ import (
 	"fmt"
 	"log"
 	"net/http"
+	"os"
+	"strings"
 
 	gwhttp "vocabulary/backend/gateway/internal/http"
+	"vocabulary/backend/gateway/internal/grpcclient"
 	"vocabulary/backend/libs/shared/config"
 	"vocabulary/backend/libs/shared/db"
-	"vocabulary/backend/modules/auth/repository"
-	"vocabulary/backend/modules/auth/service"
+	notificationservice "vocabulary/backend/modules/notification/service"
+	usersrepository "vocabulary/backend/modules/users/repository"
+	usersservice "vocabulary/backend/modules/users/service"
 	"vocabulary/backend/modules/vocabulary/repository"
 	"vocabulary/backend/modules/vocabulary/service"
 )
@@ -28,10 +32,13 @@ func main() {
 	defer pool.Close()
 
 	vocabRepo := vocabularyrepository.NewVocabularyPgxRepository(pool)
-	authRepo := authrepository.NewAuthPgxRepository(pool)
-	authSvc := authservice.NewAuthService(cfg, authRepo)
 	vocabularySvc := vocabularyservice.NewVocabularyService(cfg, vocabRepo)
-	router := gwhttp.NewGatewayRouter(cfg.JWT.Secret, cfg.CORSAllowedOrigins, authSvc, vocabularySvc)
+	usersRepo := usersrepository.NewUsersPgxRepository(pool)
+	usersSvc := usersservice.NewUsersService(usersRepo)
+	notificationSvc := notificationservice.NewNotificationService(nil)
+	authGRPCTarget := strings.TrimSpace(os.Getenv("AUTH_GRPC_TARGET"))
+	authGRPCClient := grpcclient.NewAuthClient(authGRPCTarget)
+	router := gwhttp.NewGatewayRouter(cfg.JWT.Secret, cfg.CORSAllowedOrigins, vocabularySvc, usersSvc, notificationSvc, authGRPCClient)
 
 	addr := fmt.Sprintf(":%d", cfg.Server.Port)
 	log.Printf("gateway listening on %s", addr)
