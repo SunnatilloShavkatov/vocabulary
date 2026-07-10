@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"net/http"
 	"strings"
+	"time"
 
 	jwt "github.com/golang-jwt/jwt/v5"
 )
@@ -21,16 +22,16 @@ const (
 )
 
 // RequireGatewayAuth returns a middleware that validates a Bearer JWT.
-func RequireGatewayAuth(secret string) func(http.HandlerFunc) http.HandlerFunc {
-	return requireGatewayRole(secret, "")
+func RequireGatewayAuth(secret string, cache *TokenCache) func(http.HandlerFunc) http.HandlerFunc {
+	return requireGatewayRole(secret, "", cache)
 }
 
 // RequireGatewayAdmin returns a middleware that validates a Bearer JWT and enforces role=admin.
-func RequireGatewayAdmin(secret string) func(http.HandlerFunc) http.HandlerFunc {
-	return requireGatewayRole(secret, "admin")
+func RequireGatewayAdmin(secret string, cache *TokenCache) func(http.HandlerFunc) http.HandlerFunc {
+	return requireGatewayRole(secret, "admin", cache)
 }
 
-func requireGatewayRole(secret, requiredRole string) func(http.HandlerFunc) http.HandlerFunc {
+func requireGatewayRole(secret, requiredRole string, cache *TokenCache) func(http.HandlerFunc) http.HandlerFunc {
 	return func(next http.HandlerFunc) http.HandlerFunc {
 		return func(w http.ResponseWriter, r *http.Request) {
 			authHeader := r.Header.Get("Authorization")
@@ -40,21 +41,55 @@ func requireGatewayRole(secret, requiredRole string) func(http.HandlerFunc) http
 			}
 
 			tokenStr := strings.TrimPrefix(authHeader, "Bearer ")
-			token, err := jwt.Parse(tokenStr, func(t *jwt.Token) (any, error) {
-				if _, ok := t.Method.(*jwt.SigningMethodHMAC); !ok {
-					return nil, fmt.Errorf("unexpected signing method: %v", t.Header["alg"])
+
+			var claims jwt.MapClaims
+			var cacheHit bool
+
+			if cache != nil {
+				if cachedClaims, found := cache.Get(tokenStr); found {
+					claims = cachedClaims
+					cacheHit = true
 				}
-				return []byte(secret), nil
-			})
-			if err != nil || !token.Valid {
-				writeGatewayJSON(w, http.StatusUnauthorized, map[string]string{"error": "invalid or expired token"})
-				return
 			}
 
-			claims, ok := token.Claims.(jwt.MapClaims)
-			if !ok {
-				writeGatewayJSON(w, http.StatusUnauthorized, map[string]string{"error": "invalid token claims"})
-				return
+			if !cacheHit {
+				token, err := jwt.Parse(tokenStr, func(t *jwt.Token) (any, error) {
+					if _, ok := t.Method.(*jwt.SigningMethodHMAC); !ok {
+						return nil, fmt.Errorf("unexpected signing method: %v", t.Header["alg"])
+					}
+					return []byte(secret), nil
+				})
+				if err != nil || !token.Valid {
+					writeGatewayJSON(w, http.StatusUnauthorized, map[string]string{"error": "invalid or expired token"})
+					return
+				}
+
+				var ok bool
+				claims, ok = token.Claims.(jwt.MapClaims)
+				if !ok {
+					writeGatewayJSON(w, http.StatusUnauthorized, map[string]string{"error": "invalid token claims"})
+					return
+				}
+
+				if cache != nil {
+					// Default TTL is 5 minutes
+					ttl := 5 * time.Minute
+					if expVal, exists := claims["exp"]; exists {
+						if expFloat, ok := expVal.(float64); ok {
+							expTime := time.Unix(int64(expFloat), 0)
+							remaining := time.Until(expTime)
+							if remaining > 0 {
+								if remaining < ttl {
+									ttl = remaining
+								}
+							} else {
+								writeGatewayJSON(w, http.StatusUnauthorized, map[string]string{"error": "token is expired"})
+								return
+							}
+						}
+					}
+					cache.Set(tokenStr, claims, ttl)
+				}
 			}
 
 			sub, subOK := claims["sub"].(string)

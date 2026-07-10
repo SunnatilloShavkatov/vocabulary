@@ -21,6 +21,7 @@ type fakeAuthGRPCClient struct{}
 
 func (f *fakeAuthGRPCClient) Target() string { return "fake-auth:9091" }
 func (f *fakeAuthGRPCClient) CheckConnection(context.Context) error { return nil }
+func (f *fakeAuthGRPCClient) Close() error { return nil }
 func (f *fakeAuthGRPCClient) Health(context.Context) (authv1.HealthResponse, error) {
 	return authv1.HealthResponse{Status: "ok", Service: "auth-service"}, nil
 }
@@ -40,6 +41,30 @@ func (m *mockVocabularyRepo) Create(_ context.Context, word, translation, _ stri
 
 func (m *mockVocabularyRepo) List(_ context.Context, _ string, _, _ int) ([]vocabularyservice.VocabularyItem, int, error) {
 	return []vocabularyservice.VocabularyItem{}, 0, nil
+}
+
+func (m *mockVocabularyRepo) AdminList(_ context.Context, _ vocabularyservice.AdminVocabularySearch) ([]vocabularyservice.VocabularyItem, int, error) {
+	return []vocabularyservice.VocabularyItem{}, 0, nil
+}
+
+func (m *mockVocabularyRepo) AdminCreate(_ context.Context, input vocabularyservice.AdminVocabularyUpsertInput) (*vocabularyservice.VocabularyItem, error) {
+	return &vocabularyservice.VocabularyItem{ID: "admin-created-id", Word: input.Word, Translation: input.Translation}, nil
+}
+
+func (m *mockVocabularyRepo) AdminGet(_ context.Context, id string) (*vocabularyservice.VocabularyItem, error) {
+	return &vocabularyservice.VocabularyItem{ID: id, Word: "word", Translation: "translation"}, nil
+}
+
+func (m *mockVocabularyRepo) AdminUpdate(_ context.Context, id string, input vocabularyservice.AdminVocabularyUpsertInput) (*vocabularyservice.VocabularyItem, error) {
+	return &vocabularyservice.VocabularyItem{ID: id, Word: input.Word, Translation: input.Translation}, nil
+}
+
+func (m *mockVocabularyRepo) AdminDelete(_ context.Context, _ string) error {
+	return nil
+}
+
+func (m *mockVocabularyRepo) AdminSetStatus(_ context.Context, id string, status string) (*vocabularyservice.VocabularyItem, error) {
+	return &vocabularyservice.VocabularyItem{ID: id, Word: "word", Translation: "translation", Status: status}, nil
 }
 
 func TestHealthHandler(t *testing.T) {

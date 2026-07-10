@@ -33,7 +33,7 @@ func makeToken(t *testing.T, role string, expired bool) string {
 }
 
 func TestRequireGatewayAdmin_NoHeader(t *testing.T) {
-	handler := RequireGatewayAdmin(testSecret)(func(w http.ResponseWriter, _ *http.Request) {
+	handler := RequireGatewayAdmin(testSecret, nil)(func(w http.ResponseWriter, _ *http.Request) {
 		w.WriteHeader(http.StatusOK)
 	})
 	req := httptest.NewRequest(http.MethodPost, "/", nil)
@@ -45,7 +45,7 @@ func TestRequireGatewayAdmin_NoHeader(t *testing.T) {
 }
 
 func TestRequireGatewayAdmin_InvalidToken(t *testing.T) {
-	handler := RequireGatewayAdmin(testSecret)(func(w http.ResponseWriter, _ *http.Request) {
+	handler := RequireGatewayAdmin(testSecret, nil)(func(w http.ResponseWriter, _ *http.Request) {
 		w.WriteHeader(http.StatusOK)
 	})
 	req := httptest.NewRequest(http.MethodPost, "/", nil)
@@ -58,7 +58,7 @@ func TestRequireGatewayAdmin_InvalidToken(t *testing.T) {
 }
 
 func TestRequireGatewayAdmin_ExpiredToken(t *testing.T) {
-	handler := RequireGatewayAdmin(testSecret)(func(w http.ResponseWriter, _ *http.Request) {
+	handler := RequireGatewayAdmin(testSecret, nil)(func(w http.ResponseWriter, _ *http.Request) {
 		w.WriteHeader(http.StatusOK)
 	})
 	req := httptest.NewRequest(http.MethodPost, "/", nil)
@@ -71,7 +71,7 @@ func TestRequireGatewayAdmin_ExpiredToken(t *testing.T) {
 }
 
 func TestRequireGatewayAdmin_NonAdminRole(t *testing.T) {
-	handler := RequireGatewayAdmin(testSecret)(func(w http.ResponseWriter, _ *http.Request) {
+	handler := RequireGatewayAdmin(testSecret, nil)(func(w http.ResponseWriter, _ *http.Request) {
 		w.WriteHeader(http.StatusOK)
 	})
 	req := httptest.NewRequest(http.MethodPost, "/", nil)
@@ -85,7 +85,7 @@ func TestRequireGatewayAdmin_NonAdminRole(t *testing.T) {
 
 func TestRequireGatewayAdmin_ValidAdmin(t *testing.T) {
 	called := false
-	handler := RequireGatewayAdmin(testSecret)(func(w http.ResponseWriter, r *http.Request) {
+	handler := RequireGatewayAdmin(testSecret, nil)(func(w http.ResponseWriter, r *http.Request) {
 		called = true
 		claims, ok := r.Context().Value(GatewayClaimsKey).(jwt.MapClaims)
 		if !ok || claims["role"] != "admin" {
@@ -102,6 +102,49 @@ func TestRequireGatewayAdmin_ValidAdmin(t *testing.T) {
 	}
 	if !called {
 		t.Fatal("expected next handler to be called")
+	}
+}
+
+func TestRequireGatewayAuth_CachedToken(t *testing.T) {
+	cache := NewTokenCache(100)
+	calledCount := 0
+
+	handler := RequireGatewayAuth(testSecret, cache)(func(w http.ResponseWriter, r *http.Request) {
+		calledCount++
+		claims, ok := r.Context().Value(GatewayClaimsKey).(jwt.MapClaims)
+		if !ok || claims["sub"] != "test" {
+			t.Error("expected claims in context")
+		}
+		w.WriteHeader(http.StatusOK)
+	})
+
+	token := makeToken(t, "user", false)
+
+	// 1st request (Cache Miss, parses JWT)
+	req1 := httptest.NewRequest(http.MethodGet, "/", nil)
+	req1.Header.Set("Authorization", "Bearer "+token)
+	res1 := httptest.NewRecorder()
+	handler(res1, req1)
+	if res1.Code != http.StatusOK {
+		t.Fatalf("first request failed: status %d", res1.Code)
+	}
+
+	// Verify it got cached
+	if _, found := cache.Get(token); !found {
+		t.Fatal("expected token to be cached")
+	}
+
+	// 2nd request (Cache Hit, should bypass parsing JWT and be very fast)
+	req2 := httptest.NewRequest(http.MethodGet, "/", nil)
+	req2.Header.Set("Authorization", "Bearer "+token)
+	res2 := httptest.NewRecorder()
+	handler(res2, req2)
+	if res2.Code != http.StatusOK {
+		t.Fatalf("second request failed: status %d", res2.Code)
+	}
+
+	if calledCount != 2 {
+		t.Fatalf("expected handler to be called 2 times, got %d", calledCount)
 	}
 }
 

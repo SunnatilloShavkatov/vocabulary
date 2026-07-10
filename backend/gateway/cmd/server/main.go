@@ -38,6 +38,11 @@ func main() {
 	notificationSvc := notificationservice.NewNotificationService(nil)
 	authGRPCTarget := strings.TrimSpace(os.Getenv("AUTH_GRPC_TARGET"))
 	authGRPCClient := grpcclient.NewAuthClient(authGRPCTarget)
+	defer func() {
+		if err := authGRPCClient.Close(); err != nil {
+			log.Printf("error closing auth grpc client connection: %v", err)
+		}
+	}()
 	router := gwhttp.NewGatewayRouter(cfg.JWT.Secret, cfg.CORSAllowedOrigins, vocabularySvc, usersSvc, notificationSvc, authGRPCClient)
 
 	addr := fmt.Sprintf(":%d", cfg.Server.Port)

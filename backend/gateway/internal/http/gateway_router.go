@@ -21,6 +21,7 @@ type GatewayRouter struct {
 	mux                *http.ServeMux
 	corsAllowedOrigins string
 	authGRPCClient     grpcclient.AuthServiceClient
+	tokenCache         *gatewaymiddleware.TokenCache
 }
 
 func NewGatewayRouter(
@@ -32,7 +33,13 @@ func NewGatewayRouter(
 	authGRPCClient grpcclient.AuthServiceClient,
 ) *GatewayRouter {
 	mux := http.NewServeMux()
-	r := &GatewayRouter{mux: mux, corsAllowedOrigins: corsAllowedOrigins, authGRPCClient: authGRPCClient}
+	cache := gatewaymiddleware.NewTokenCache(10000)
+	r := &GatewayRouter{
+		mux:                mux,
+		corsAllowedOrigins: corsAllowedOrigins,
+		authGRPCClient:     authGRPCClient,
+		tokenCache:         cache,
+	}
 	r.registerGatewayRoutes(jwtSecret, vocabularySvc, usersSvc, notificationSvc)
 	return r
 }
@@ -47,8 +54,8 @@ func (r *GatewayRouter) registerGatewayRoutes(
 	usersSvc *usersservice.UsersService,
 	notificationSvc *notificationservice.NotificationService,
 ) {
-	protectedAuth := gatewaymiddleware.RequireGatewayAuth(jwtSecret)
-	protectedAdmin := gatewaymiddleware.RequireGatewayAdmin(jwtSecret)
+	protectedAuth := gatewaymiddleware.RequireGatewayAuth(jwtSecret, r.tokenCache)
+	protectedAdmin := gatewaymiddleware.RequireGatewayAdmin(jwtSecret, r.tokenCache)
 	authProxy := newGatewayAuthProxyHandler(r.authGRPCClient)
 
 	r.mux.HandleFunc("GET /healthz", GatewayHealthHandler)
