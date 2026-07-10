@@ -48,7 +48,14 @@ func main() {
 
 	errCh := make(chan error, 2)
 	go func() {
-		errCh <- http.ListenAndServe(addr, handler)
+		server := &http.Server{
+			Addr:         addr,
+			Handler:      handler,
+			ReadTimeout:  5 * time.Second,
+			WriteTimeout: 10 * time.Second,
+			IdleTimeout:  120 * time.Second,
+		}
+		errCh <- server.ListenAndServe()
 	}()
 
 	grpcPort := authGRPCPort(9091)

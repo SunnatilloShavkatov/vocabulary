@@ -87,6 +87,34 @@ func TestVersionRoute(t *testing.T) {
 	}
 }
 
+func TestSwaggerRoutes(t *testing.T) {
+	r := newTestRouter()
+
+	t.Run("Swagger JSON", func(t *testing.T) {
+		req := httptest.NewRequest(http.MethodGet, "/swagger/doc.json", nil)
+		res := httptest.NewRecorder()
+		r.Handler().ServeHTTP(res, req)
+		if res.Code != http.StatusOK {
+			t.Fatalf("expected status %d, got %d", http.StatusOK, res.Code)
+		}
+		if res.Header().Get("Content-Type") != "application/json" {
+			t.Errorf("expected Content-Type application/json, got %s", res.Header().Get("Content-Type"))
+		}
+	})
+
+	t.Run("Swagger UI", func(t *testing.T) {
+		req := httptest.NewRequest(http.MethodGet, "/swagger/", nil)
+		res := httptest.NewRecorder()
+		r.Handler().ServeHTTP(res, req)
+		if res.Code != http.StatusOK {
+			t.Fatalf("expected status %d, got %d", http.StatusOK, res.Code)
+		}
+		if res.Header().Get("Content-Type") != "text/html" {
+			t.Errorf("expected Content-Type text/html, got %s", res.Header().Get("Content-Type"))
+		}
+	})
+}
+
 func TestModuleRoutes(t *testing.T) {
 	r := newTestRouter()
 
@@ -157,6 +185,46 @@ func newTestRouter() *GatewayRouter {
 	usersSvc := usersservice.NewUsersService(nil)
 	notificationSvc := notificationservice.NewNotificationService(nil)
 	authGRPCClient := &fakeAuthGRPCClient{}
-	return NewGatewayRouter("test-secret", "*", vocabularySvc, usersSvc, notificationSvc, authGRPCClient)
+	return NewGatewayRouter("test-secret", "*", "", vocabularySvc, usersSvc, notificationSvc, authGRPCClient)
+}
+
+func TestRouter_APITokenEnforcement(t *testing.T) {
+	cfg := config.Config{
+		JWT: config.JWTConfig{Secret: "test-secret", AccessTTLMinutes: 15},
+	}
+	vocabularySvc := vocabularyservice.NewVocabularyService(cfg, &mockVocabularyRepo{})
+	usersSvc := usersservice.NewUsersService(nil)
+	notificationSvc := notificationservice.NewNotificationService(nil)
+	authGRPCClient := &fakeAuthGRPCClient{}
+	
+	r := NewGatewayRouter("test-secret", "*", "secure-api-token", vocabularySvc, usersSvc, notificationSvc, authGRPCClient)
+
+	t.Run("Blocked without X-API-Token header", func(t *testing.T) {
+		req := httptest.NewRequest(http.MethodGet, "/v1/vocabulary", nil)
+		res := httptest.NewRecorder()
+		r.Handler().ServeHTTP(res, req)
+		if res.Code != http.StatusUnauthorized {
+			t.Errorf("expected 401, got %d", res.Code)
+		}
+	})
+
+	t.Run("Allowed with valid X-API-Token header", func(t *testing.T) {
+		req := httptest.NewRequest(http.MethodGet, "/v1/vocabulary", nil)
+		req.Header.Set("X-API-Token", "secure-api-token")
+		res := httptest.NewRecorder()
+		r.Handler().ServeHTTP(res, req)
+		if res.Code != http.StatusOK {
+			t.Errorf("expected 200, got %d", res.Code)
+		}
+	})
+
+	t.Run("Bypassed for health check", func(t *testing.T) {
+		req := httptest.NewRequest(http.MethodGet, "/healthz", nil)
+		res := httptest.NewRecorder()
+		r.Handler().ServeHTTP(res, req)
+		if res.Code != http.StatusOK {
+			t.Errorf("expected 200, got %d", res.Code)
+		}
+	})
 }
 

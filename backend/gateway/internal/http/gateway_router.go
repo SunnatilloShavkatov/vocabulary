@@ -2,6 +2,7 @@ package gatewayhttp
 
 import (
 	"context"
+	_ "embed"
 	"encoding/json"
 	"log"
 	"net/http"
@@ -22,11 +23,13 @@ type GatewayRouter struct {
 	corsAllowedOrigins string
 	authGRPCClient     grpcclient.AuthServiceClient
 	tokenCache         *gatewaymiddleware.TokenCache
+	apiToken           string
 }
 
 func NewGatewayRouter(
 	jwtSecret string,
 	corsAllowedOrigins string,
+	apiToken string,
 	vocabularySvc *vocabularyservice.VocabularyService,
 	usersSvc *usersservice.UsersService,
 	notificationSvc *notificationservice.NotificationService,
@@ -39,13 +42,18 @@ func NewGatewayRouter(
 		corsAllowedOrigins: corsAllowedOrigins,
 		authGRPCClient:     authGRPCClient,
 		tokenCache:         cache,
+		apiToken:           apiToken,
 	}
 	r.registerGatewayRoutes(jwtSecret, vocabularySvc, usersSvc, notificationSvc)
 	return r
 }
 
 func (r *GatewayRouter) Handler() http.Handler {
-	return gatewaymiddleware.WithGatewayCORS(r.corsAllowedOrigins, withGatewayRequestLogging(r.mux))
+	return gatewaymiddleware.WithGatewayAPIToken(r.apiToken,
+		gatewaymiddleware.WithGatewayCORS(r.corsAllowedOrigins,
+			withGatewayRequestLogging(r.mux),
+		),
+	)
 }
 
 func (r *GatewayRouter) registerGatewayRoutes(
@@ -68,6 +76,62 @@ func (r *GatewayRouter) registerGatewayRoutes(
 	vocabularycontroller.RegisterVocabularyRoutes(r.mux, vocabularySvc, protectedAuth, protectedAdmin, gatewaymiddleware.GetGatewayAdminSubject)
 	userscontroller.RegisterUsersRoutes(r.mux, usersSvc, protectedAuth, protectedAdmin)
 	notificationcontroller.RegisterNotificationRoutes(r.mux, notificationSvc, protectedAuth)
+
+	// Swagger endpoints
+	r.mux.HandleFunc("GET /swagger/doc.json", r.swaggerDocHandler)
+	r.mux.HandleFunc("GET /swagger/", r.swaggerUIHandler)
+}
+
+//go:embed swagger.json
+var swaggerJSON []byte
+
+const swaggerUIHTML = `<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Dictionary Platform API Docs</title>
+  <link rel="stylesheet" type="text/css" href="https://unpkg.com/swagger-ui-dist@5.11.0/swagger-ui.css" />
+  <style>
+    html { box-sizing: border-box; overflow:-moz-scrollbars-vertical; overflow-y:scroll; }
+    *, *:before, *:after { box-sizing: inherit; }
+    body { margin:0; background: #fafafa; }
+  </style>
+</head>
+<body>
+  <div id="swagger-ui"></div>
+  <script src="https://unpkg.com/swagger-ui-dist@5.11.0/swagger-ui-bundle.js" charset="UTF-8"></script>
+  <script src="https://unpkg.com/swagger-ui-dist@5.11.0/swagger-ui-standalone-preset.js" charset="UTF-8"></script>
+  <script>
+    window.onload = function() {
+      const ui = SwaggerUIBundle({
+        url: "/swagger/doc.json",
+        dom_id: '#swagger-ui',
+        deepLinking: true,
+        presets: [
+          SwaggerUIBundle.presets.apis,
+          SwaggerUIStandalonePreset
+        ],
+        plugins: [
+          SwaggerUIBundle.plugins.DownloadUrl
+        ],
+        layout: "StandaloneLayout"
+      });
+      window.ui = ui;
+    };
+  </script>
+</body>
+</html>`
+
+func (r *GatewayRouter) swaggerDocHandler(w http.ResponseWriter, _ *http.Request) {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(http.StatusOK)
+	_, _ = w.Write(swaggerJSON)
+}
+
+func (r *GatewayRouter) swaggerUIHandler(w http.ResponseWriter, _ *http.Request) {
+	w.Header().Set("Content-Type", "text/html")
+	w.WriteHeader(http.StatusOK)
+	_, _ = w.Write([]byte(swaggerUIHTML))
 }
 
 func (r *GatewayRouter) gatewayAuthGRPCHealthHandler(w http.ResponseWriter, req *http.Request) {

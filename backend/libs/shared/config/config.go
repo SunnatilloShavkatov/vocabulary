@@ -17,6 +17,8 @@ type DatabaseConfig struct {
 	User     string
 	Password string
 	SSLMode  string
+	MaxConns int
+	MinConns int
 }
 
 type JWTConfig struct {
@@ -41,14 +43,23 @@ type BootstrapAdminConfig struct {
 	Password string
 }
 
+type RedisConfig struct {
+	Host     string
+	Port     int
+	Password string
+	DB       int
+}
+
 type Config struct {
 	Server         ServerConfig
 	Database       DatabaseConfig
+	Redis          RedisConfig
 	JWT            JWTConfig
 	BootstrapAdmin BootstrapAdminConfig
 	RabbitMQ       RabbitMQConfig
 	FCM            FCMConfig
 	CORSAllowedOrigins string
+	APIToken       string
 }
 
 func Load() (Config, error) {
@@ -60,6 +71,26 @@ func Load() (Config, error) {
 	dbPort, err := envInt("DB_PORT", 5432)
 	if err != nil {
 		return Config{}, fmt.Errorf("invalid DB_PORT: %w", err)
+	}
+
+	dbMaxConns, err := envInt("DB_MAX_CONNS", 100)
+	if err != nil {
+		return Config{}, fmt.Errorf("invalid DB_MAX_CONNS: %w", err)
+	}
+
+	dbMinConns, err := envInt("DB_MIN_CONNS", 10)
+	if err != nil {
+		return Config{}, fmt.Errorf("invalid DB_MIN_CONNS: %w", err)
+	}
+
+	redisPort, err := envInt("REDIS_PORT", 6379)
+	if err != nil {
+		return Config{}, fmt.Errorf("invalid REDIS_PORT: %w", err)
+	}
+
+	redisDB, err := envInt("REDIS_DB", 0)
+	if err != nil {
+		return Config{}, fmt.Errorf("invalid REDIS_DB: %w", err)
 	}
 
 	jwtTTL, err := envInt("JWT_ACCESS_TTL_MINUTES", 15)
@@ -76,6 +107,14 @@ func Load() (Config, error) {
 			User:     envString("DB_USER", "vocabulary"),
 			Password: envString("DB_PASSWORD", "vocabulary"),
 			SSLMode:  envString("DB_SSLMODE", "disable"),
+			MaxConns: dbMaxConns,
+			MinConns: dbMinConns,
+		},
+		Redis: RedisConfig{
+			Host:     envString("REDIS_HOST", "localhost"),
+			Port:     redisPort,
+			Password: envString("REDIS_PASSWORD", ""),
+			DB:       redisDB,
 		},
 		JWT: JWTConfig{
 			Secret:           envString("JWT_SECRET", "change-me"),
@@ -96,6 +135,7 @@ func Load() (Config, error) {
 			CredentialsFile: envString("FCM_CREDENTIALS_FILE", ""),
 		},
 		CORSAllowedOrigins: envString("CORS_ALLOWED_ORIGINS", "*"),
+		APIToken:           envString("API_TOKEN", "super-secret-api-token"),
 	}
 
 	return cfg, nil

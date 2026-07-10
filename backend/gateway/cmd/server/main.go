@@ -7,6 +7,7 @@ import (
 	"net/http"
 	"os"
 	"strings"
+	"time"
 
 	gwhttp "vocabulary/backend/gateway/internal/http"
 	"vocabulary/backend/gateway/internal/grpcclient"
@@ -31,8 +32,16 @@ func main() {
 	}
 	defer pool.Close()
 
+	rdb, err := db.NewRedisClient(cfg.Redis)
+	if err != nil {
+		log.Fatalf("failed to connect to redis: %v", err)
+	}
+	defer rdb.Close()
+
 	vocabRepo := vocabularyrepository.NewVocabularyPgxRepository(pool)
-	vocabularySvc := vocabularyservice.NewVocabularyService(cfg, vocabRepo)
+	cachedVocabRepo := vocabularyrepository.NewCachedVocabularyRepository(vocabRepo, rdb)
+	vocabularySvc := vocabularyservice.NewVocabularyService(cfg, cachedVocabRepo)
+
 	usersRepo := usersrepository.NewUsersPgxRepository(pool)
 	usersSvc := usersservice.NewUsersService(usersRepo)
 	notificationSvc := notificationservice.NewNotificationService(nil)
@@ -43,11 +52,20 @@ func main() {
 			log.Printf("error closing auth grpc client connection: %v", err)
 		}
 	}()
-	router := gwhttp.NewGatewayRouter(cfg.JWT.Secret, cfg.CORSAllowedOrigins, vocabularySvc, usersSvc, notificationSvc, authGRPCClient)
+	router := gwhttp.NewGatewayRouter(cfg.JWT.Secret, cfg.CORSAllowedOrigins, cfg.APIToken, vocabularySvc, usersSvc, notificationSvc, authGRPCClient)
 
 	addr := fmt.Sprintf(":%d", cfg.Server.Port)
 	log.Printf("gateway listening on %s", addr)
-	if err := http.ListenAndServe(addr, router.Handler()); err != nil {
+
+	server := &http.Server{
+		Addr:         addr,
+		Handler:      router.Handler(),
+		ReadTimeout:  5 * time.Second,
+		WriteTimeout: 10 * time.Second,
+		IdleTimeout:  120 * time.Second,
+	}
+
+	if err := server.ListenAndServe(); err != nil && err != http.ErrServerClosed {
 		log.Fatalf("server stopped: %v", err)
 	}
 }

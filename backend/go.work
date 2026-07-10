@@ -1,12 +1,11 @@
-go 1.23
+go 1.24
 
 use (
 	./gateway
+	./libs/shared
 	./modules/auth
 	./modules/notification
-	./proto
 	./modules/users
 	./modules/vocabulary
-	./libs/shared
+	./proto
 )
-
